@@ -1,0 +1,240 @@
+[
+  {
+    "check": "2024 March equinox     dec",
+    "value": 0.0015296837025773264,
+    "expected": 0.0,
+    "tolerance": 0.02,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "2024 June solstice     dec",
+    "value": 23.43542504085082,
+    "expected": 23.44,
+    "tolerance": 0.03,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "2024 September equinox dec",
+    "value": -0.001169235664899354,
+    "expected": 0.0,
+    "tolerance": 0.02,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "2024 December solstice dec",
+    "value": -23.435351577613925,
+    "expected": -23.44,
+    "tolerance": 0.03,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "Perihelion distance",
+    "value": 0.9832939236779202,
+    "expected": 0.98329,
+    "tolerance": 0.0004,
+    "unit": "AU",
+    "pass": true
+  },
+  {
+    "check": "Aphelion distance",
+    "value": 1.0167099590124755,
+    "expected": 1.01671,
+    "tolerance": 0.0004,
+    "unit": "AU",
+    "pass": true
+  },
+  {
+    "check": "SSO inclination at h = 400 km",
+    "value": 97.03003740521586,
+    "expected": 97.03,
+    "tolerance": 0.05,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "SSO inclination at h = 600 km",
+    "value": 97.78766871179252,
+    "expected": 97.79,
+    "tolerance": 0.05,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "SSO inclination at h = 800 km",
+    "value": 98.60310960103986,
+    "expected": 98.6,
+    "tolerance": 0.05,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "SSO inclination at h = 1000 km",
+    "value": 99.47933331783412,
+    "expected": 99.48,
+    "tolerance": 0.05,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "LTAN drift over one year",
+    "value": 5.973558575789184e-05,
+    "expected": 0.0,
+    "tolerance": 2.0,
+    "unit": "min",
+    "pass": true
+  },
+  {
+    "check": "beta* at ISS altitude (~420 km), textbook value ~70 deg",
+    "value": 69.7544742378581,
+    "expected": 70.0,
+    "tolerance": 0.5,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "f_E(beta*) = 0 at h = 420 km",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "f_E just inside beta* > 0 at h = 420 km",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 0.0,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "f_E(beta*) = 0 at h = 550 km",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "f_E just inside beta* > 0 at h = 550 km",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 0.0,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "f_E(beta*) = 0 at h = 800 km",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "f_E just inside beta* > 0 at h = 800 km",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 0.0,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Numerical == closed form under the closed form's own assumptions",
+    "value": 2.7755575615628914e-16,
+    "expected": 0.0,
+    "tolerance": 1e-09,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "closed-form bias from neglected J2 and solar motion",
+    "value": 0.000418037071584653,
+    "unit": "eclipse fraction",
+    "pass": true
+  },
+  {
+    "check": "nu in [0, 1]",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "",
+    "pass": true
+  },
+  {
+    "check": "conical fully-sunlit set implies nu == 1",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-09,
+    "unit": "",
+    "pass": true
+  },
+  {
+    "check": "cylindrical-eclipsed set implies nu < 1",
+    "value": 0.4944301871322221,
+    "expected": 0.0,
+    "tolerance": 0.999,
+    "unit": "",
+    "pass": true
+  },
+  {
+    "check": "Eclipse duration grid-independent (128 vs 8192 samples/rev)",
+    "value": 3.183231456205249e-12,
+    "expected": 0.0,
+    "tolerance": 0.001,
+    "unit": "s",
+    "pass": true
+  },
+  {
+    "check": "Insolation integral converged at 512 samples/rev",
+    "value": 2.832987790577809e-05,
+    "expected": 0.0,
+    "tolerance": 0.0001,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Insolation integral converged at 2048 samples/rev",
+    "value": 1.3492474459770996e-07,
+    "expected": 0.0,
+    "tolerance": 1e-06,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "h_atm sensitivity 0 km",
+    "value": 34.61494792383872,
+    "unit": "min",
+    "pass": true
+  },
+  {
+    "check": "h_atm sensitivity 50 km",
+    "value": 35.25487651115978,
+    "unit": "min",
+    "pass": true
+  },
+  {
+    "check": "h_atm sensitivity 90 km",
+    "value": 35.788492357974185,
+    "unit": "min",
+    "pass": true
+  },
+  {
+    "check": "h_atm sensitivity 120 km",
+    "value": 36.20306895979275,
+    "unit": "min",
+    "pass": true
+  },
+  {
+    "check": "Penumbra duration is a small correction",
+    "value": 18.852398445615503,
+    "expected": 16.0,
+    "tolerance": 8.0,
+    "unit": "s",
+    "pass": true
+  }
+]
