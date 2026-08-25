@@ -372,40 +372,43 @@ def optimal_schedule(trace: PowerTrace, weights: Optional[np.ndarray] = None) ->
     if weights is None:
         w = w * (1.0 + 1e-6 * np.linspace(1.0, 0.0, K))
 
-    # Variable order: p[0..K-1], c[0..K-1], d[0..K-1]
+    # Variables: p[0..K-1], c[0..K-1], d[0..K-1], b[0..K-1].
+    #
+    # Carrying the stored energy b as explicit variables with a bidiagonal
+    # recursion keeps the constraint matrix at O(K) non-zeros.  Expressing b as
+    # a running sum of c and d instead needs a dense lower-triangular block,
+    # which is O(K^2) and becomes unusable past a few orbits.
     I = eye(K, format="csr")
     Z = csr_matrix((K, K))
 
     # Power balance:  p + c - d = G - P_h
-    A_eq = hstack([I, I, -I], format="csr")
-    b_eq = G - sys_.housekeeping_w
+    balance = hstack([I, I, -I, Z], format="csr")
 
-    # State of charge is a running sum, so the level constraints are a
-    # lower-triangular system in (c, d):
-    #   b[k] = cap + dt (eta_c sum c - sum d / eta_d)
-    L = csr_matrix(np.tril(np.ones((K, K))))
-    soc_coeff = hstack(
-        [Z, L * (sys_.charge_efficiency * dt_h), L * (-dt_h / sys_.discharge_efficiency)],
-        format="csr",
+    # State of charge:  b[k] - b[k-1] - dt (eta_c c[k] - d[k]/eta_d) = 0,
+    # with b[-1] pinned to a full battery, so the first row carries `cap`.
+    shift = eye(K, k=-1, format="csr")
+    recursion = hstack([
+        Z,
+        I * (-sys_.charge_efficiency * dt_h),
+        I * (dt_h / sys_.discharge_efficiency),
+        I - shift,
+    ], format="csr")
+    rhs_recursion = np.zeros(K)
+    rhs_recursion[0] = cap
+
+    # Periodicity: the battery must end as full as it began.
+    periodic = csr_matrix(
+        (np.array([1.0]), (np.array([0]), np.array([4 * K - 1]))), shape=(1, 4 * K)
     )
-    # floor <= cap + soc_coeff x <= cap   ->   two inequality blocks
-    A_ub = vstack([-soc_coeff, soc_coeff], format="csr")
-    b_ub = np.concatenate([
-        np.full(K, cap - floor),        # -(soc change) <= cap - floor
-        np.zeros(K),                    #  (soc change) <= 0   (cannot exceed full)
-    ])
 
-    # Periodicity: the final level must return to full, i.e. soc change >= 0
-    # for the last row.  That row is already in A_ub as <= 0, so pinning it to
-    # equality is the cleanest statement.
-    A_eq = vstack([A_eq, soc_coeff.getrow(K - 1)], format="csr")
-    b_eq = np.concatenate([b_eq, [0.0]])
+    A_eq = vstack([balance, recursion, periodic], format="csr")
+    b_eq = np.concatenate([G - sys_.housekeeping_w, rhs_recursion, [cap]])
+
+    bounds = [(0.0, None)] * (3 * K) + [(floor, cap)] * K
 
     res = linprog(
-        c=-np.concatenate([w * trace.dt_s, np.zeros(2 * K)]),
-        A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
-        bounds=[(0.0, None)] * (3 * K),
-        method="highs",
+        c=-np.concatenate([w * trace.dt_s, np.zeros(3 * K)]),
+        A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs",
     )
     if not res.success:  # pragma: no cover - reported rather than raised
         return {"success": False, "message": res.message}

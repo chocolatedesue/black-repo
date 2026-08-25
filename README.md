@@ -94,16 +94,29 @@ Two reports are produced:
 ## Layout
 
 ```
-solarsim/          constants, time, solar ephemeris, orbit, geometry,
-                   shadow, attitude, simulate, constellation, power
-experiments/       validate.py, run_study.py, run_profiles.py, build_page.py
-results/           *.json written by the experiments
-web/               style.css, charts.js, app.js, index.template.html
-                   -> index.html (single self-contained file)
+solarsim/          constants, time, solar ephemeris, orbit, geometry, shadow,
+                   attitude, simulate, constellation, power, schedule, evaluate
+experiments/       validate.py, run_study.py, run_profiles.py,
+                   export_traces.py, eval_policies.py, build_page.py
+results/           *.json and trace_*.csv written by the experiments
+web/               style.css, charts.js, app.js, app-scheduling.js, templates
+                   -> index.html, scheduling.html (self-contained)
+.claude/skills/    project skills: reproduce, experiment, evaluate
 ```
 
-Every figure on the generated page reads `results/*.json` directly; no value is
+Every figure on both generated pages reads `results/` directly; no value is
 transcribed by hand.
+
+## Working on this repository
+
+Three project skills capture the workflows, so a session in this repository can
+pick them up without being told:
+
+| Skill | Covers |
+|---|---|
+| `reproduce` | Regenerate every result and page, and verify the regeneration matches what is committed |
+| `experiment` | Add an orbit, sweep, constellation, array model or figure — and what must not break |
+| `evaluate` | Score a scheduling policy against the baseline and the LP optimum, with the traps that make naive comparisons wrong |
 
 ## Known limits
 
