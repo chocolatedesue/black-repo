@@ -13,7 +13,8 @@ python -m experiments.run_study      # E1-E6, one simulated year each   (~20 min
 python -m experiments.run_profiles   # E7, master curve and orbit profiles (~2 min)
 python -m experiments.run_energy     # E8, energy intensity and consumption (~20 s)
 python -m experiments.export_traces  # scheduling traces and bounds (needs SciPy)
-python -m experiments.gpu_match      # E9, accelerator sizing; --dod, --bus-kg, --all
+python -m experiments.gpu_match      # E9, accelerator sizing; --dod --calibration
+                                    #     --uncertainty --panel --radiator --bus-kg
 python -m experiments.build_page     # assemble both HTML reports from results/
 ```
 
@@ -41,7 +42,7 @@ Two reports are produced:
 | Accounting | A closed energy ledger from the array aperture to the load: every Wh of intercepted sunlight equals the sum of the optical, conversion, temperature, degradation, MPPT, charge and discharge losses, the curtailed surplus, and the delivered loads — verified to machine precision. |
 | Constellations | Walker Delta and Star, per-plane statistics and instantaneous constellation-level sunlit fraction. |
 | Scheduling | Per-slot power traces, the constant-draw and depth-of-discharge bounds, the burst envelope, and a reference LP for the optimal variable schedule. |
-| Hardware | A catalogue of flown and candidate compute accelerators, the marginal array + battery + radiator mass of one *always-on* watt in a given orbit, and the depth-of-discharge / cycle-life trade that decides whether always-on is a five-year mission. |
+| Hardware | A catalogue of flown and candidate compute accelerators, the marginal array + battery + radiator mass of one *always-on* watt in a given orbit, the depth-of-discharge / cycle-life trade that decides whether always-on is a five-year mission, a term-by-term generation uncertainty budget, and calibration against published industry figures. |
 
 ## Verification
 
@@ -132,6 +133,30 @@ Two reports are produced:
   Eclipse-time computation is therefore always bought by a deadline, a coverage
   window or a latency target — never by energy.
 
+### How accurate is the generation number
+
+`generation_uncertainty()` decomposes `P_gen = ν·S·A·η_cell·f_pack·f_deg·η_ppt·κ`
+term by term and labels each *measured*, *validated*, *modelled* or *assumed*.
+The geometry (ν, κ, durations) is validated to ~1e-16 and grid-free; the solar
+constant is measured to 0.04 %; the array temperature is modelled. **All of the
+remaining uncertainty is in four engineering coefficients, and all four are
+constant multipliers on power** — 0.59×–1.23× at the all-wrong-together corner,
+dominated by the cell efficiency, which is a datasheet lookup rather than a
+modelling error.
+
+Because that uncertainty is a pure scale factor, it **cancels exactly** out of
+every ratio the study reports: duty cycles, the LTAN comparison, plane-to-plane
+spread, scheduling headroom, battery cycles per year, and the relative cost of
+an always-on watt between orbits. It moves only absolute watts, and by exactly
+the factor you got wrong. That is why the conclusions are quoted as ratios.
+
+`check_against_reference()` calibrates the chain against the only external
+anchor available — SpaceX's announced AI1 figures, which are company claims from
+a product unveiling rather than flight telemetry. Selecting
+`--panel commercial_megaconstellation --radiator deployable_liquid` reproduces
+both stated densities to 1.00×. Neither SpaceX nor Google publishes array power
+for an operational satellite, so no stronger check exists.
+
 ### Running an accelerator through eclipse
 
 - Always-on is never impossible, only priced. One watt of *continuous* payload
@@ -146,7 +171,14 @@ Two reports are produced:
   same part on the study's reference 2 m² / 600 Wh bus runs at a **28 % duty
   cycle**.
 - The radiator is not a footnote: in vacuum every delivered watt leaves as heat,
-  so the radiator is 60–70 % of the array area for any part in the catalogue.
+  so the radiator is sized by the same number as the array. **How large it is
+  depends entirely on the radiator class**, and the two differ by 5.6×: a
+  single-sided body-mounted panel rejects ~250 W/m² and comes out at 60–70 % of
+  the array area, while a double-sided deployable liquid radiator held
+  knife-edge to the Sun rejects ~1400 W/m² and is ~10 %. SpaceX's announced AI1
+  quotes the latter, and its 110 m² × 1400 W/m² = 154 kW capacity is sized to
+  its 150 kW array — an independent confirmation of the sizing rule. Choose with
+  `--radiator`; the H100 case is 59 kg body-mounted, 46 kg deployable.
 - **Depth of discharge, not mass, decides always-on.** Running through eclipse
   is one discharge cycle per orbit — 5 492 a year at LTAN 10:30. Halving battery
   mass by going from 30 % to 50 % DoD cuts life from 5.5 years to 1.8. On a
@@ -201,8 +233,12 @@ The accelerator sizing in `solarsim/hardware.py` is a scoping calculation, not a
 verified result: the orbital inputs come from the validated simulation, but the
 platform coefficients (130 Wh/kg battery, 100 W/kg array, 250 W/m² radiator) are
 engineering figures from the literature. `sensitivity()` reports the span across
-their plausible ranges — for the H100 case, 40–110 kg against a 59 kg nominal.
-Quote the ratios, not the absolute masses.
+their plausible ranges — for the H100 case, 40–110 kg against a 59 kg nominal
+with a body-mounted radiator, 32–76 kg against 46 kg with a deployable one.
+Quote the ratios, not the absolute masses. The residual gap against SpaceX's
+announced 70 W/kg for a whole spacecraft (this model reaches 26–34 W/kg for the
+EPS and thermal hardware alone) sits in array and battery specific mass, and is
+left open rather than tuned away.
 
 The thermal model is a single node per unit array area: it has no conduction to
 the bus, no gradient across the panel, and no bus thermal state, so the survival

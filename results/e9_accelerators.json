@@ -7,7 +7,145 @@
   "radiator_w_per_m2": 250.0,
   "radiator_kg_per_m2": 4.0,
   "housekeeping_w": 45.0,
-  "dod_limit": 0.3
+  "dod_limit": 0.3,
+  "cell_efficiency": 0.3
+ },
+ "external_calibration": {
+  "reference": "SpaceX AI1 orbital compute satellite (announced 2026)",
+  "kind": "company claim, product unveiling",
+  "array": {
+   "reference_w_per_m2": 250.0,
+   "model_bol_w_per_m2": 341.74710000000005,
+   "model_eol_w_per_m2": 290.48503500000004,
+   "ratio_bol": 1.3669884,
+   "implied_cell_efficiency": 0.21946053090135947
+  },
+  "radiator": {
+   "reference_w_per_m2": 1400.0,
+   "model_w_per_m2": 250.0,
+   "ratio": 0.17857142857142858,
+   "reference_capacity_kw": 154.0,
+   "reference_array_kw": 150.0,
+   "capacity_over_array": 1.0266666666666666
+  },
+  "specific_power": {
+   "reference_w_per_kg": 70.0,
+   "note": "The remaining gap after array and radiator technology are matched sits in specific mass: this model uses 100 W/kg for the array and 130 Wh/kg for the battery, which are the literature figures for conventional deployable hardware. A claim of 70 W/kg for a whole spacecraft requires an array several times lighter per watt than that. The gap is left open rather than tuned away -- it is the difference between what is documented and what is announced."
+  },
+  "note": "The radiator's stated capacity, 110 m^2 x 1400 W/m^2 = 154 kW, is sized to the full 150 kW array -- an independent confirmation that in vacuum the radiator is sized by the same number as the array."
+ },
+ "generation_uncertainty": {
+  "terms": [
+   {
+    "term": "solar_constant",
+    "nominal": 1.0,
+    "low": 0.9996,
+    "high": 1.0004,
+    "relative_low": 0.9996,
+    "relative_high": 1.0004,
+    "status": "measured",
+    "source": "1361 +- 0.5 W/m^2 total solar irradiance, Kopp & Lean (2011), TIM/SORCE."
+   },
+   {
+    "term": "sun_distance",
+    "nominal": 1.0,
+    "low": 0.9668,
+    "high": 1.0344,
+    "relative_low": 0.9668,
+    "relative_high": 1.0344,
+    "status": "modelled",
+    "source": "+-3.3 % annual 1/r^2 modulation; ephemeris validated against almanac perihelion and aphelion distances. Not an error -- a real seasonal signal."
+   },
+   {
+    "term": "occultation_nu",
+    "nominal": 1.0,
+    "low": 1.0,
+    "high": 1.0,
+    "relative_low": 1.0,
+    "relative_high": 1.0,
+    "status": "validated",
+    "source": "Reproduces the closed-form cylindrical eclipse fraction to ~1e-16 under its own assumptions; durations are grid-free by bisection."
+   },
+   {
+    "term": "pointing_kappa",
+    "nominal": 1.0,
+    "low": 0.99,
+    "high": 1.0,
+    "relative_low": 0.99,
+    "relative_high": 1.0,
+    "status": "modelled",
+    "source": "Exact given the attitude model. The band allows for real pointing error and drive backlash, which the kinematics do not represent."
+   },
+   {
+    "term": "cell_efficiency",
+    "nominal": 0.3,
+    "low": 0.22,
+    "high": 0.32,
+    "relative_low": 0.7333333333333334,
+    "relative_high": 1.0666666666666667,
+    "status": "assumed",
+    "source": "Technology choice, not measurement error: 30-32 % for triple-junction GaAs, ~22 % implied by SpaceX's stated 250 W/m^2 areal density."
+   },
+   {
+    "term": "packing_factor",
+    "nominal": 0.9,
+    "low": 0.85,
+    "high": 0.93,
+    "relative_low": 0.9444444444444444,
+    "relative_high": 1.0333333333333334,
+    "status": "assumed",
+    "source": "Cell area over substrate area; depends on cell geometry and layout."
+   },
+   {
+    "term": "degradation",
+    "nominal": 0.85,
+    "low": 0.75,
+    "high": 0.92,
+    "relative_low": 0.8823529411764706,
+    "relative_high": 1.0823529411764707,
+    "status": "assumed",
+    "source": "End-of-life radiation and UV. 0.85 is conservative for a 5-year mission at 550 km, where the radiation environment is benign compared with the belts; it would be right for a longer mission or a higher altitude."
+   },
+   {
+    "term": "ppt_efficiency",
+    "nominal": 0.93,
+    "low": 0.9,
+    "high": 0.96,
+    "relative_low": 0.9677419354838709,
+    "relative_high": 1.032258064516129,
+    "status": "assumed",
+    "source": "MPPT and PCDU conversion."
+   },
+   {
+    "term": "temperature",
+    "nominal": 1.0,
+    "low": 0.927,
+    "high": 0.97,
+    "relative_low": 0.927,
+    "relative_high": 0.97,
+    "status": "modelled",
+    "source": "Array temperature from the lumped radiative balance in solarsim.thermal, with the cell's linear coefficient. Costs 3.0-7.3 % of annual harvested energy across the swept optics range; off by default."
+   }
+  ],
+  "assumed_multiplier_low": 0.5913978494623656,
+  "assumed_multiplier_high": 1.2314771241830067,
+  "assumed_span_pct": 64.00792747206411,
+  "geometry_status": "validated to ~1e-16 against the closed form; grid-independent",
+  "invariant_under_this_uncertainty": [
+   "eclipse and sunlit durations",
+   "duty cycle and eclipse fraction",
+   "LTAN and altitude comparisons (ratios of harvested energy)",
+   "plane-to-plane spread in a constellation",
+   "scheduling headroom (LP optimum over constant-draw bound)",
+   "relative cost of an always-on watt between orbits",
+   "battery cycles per year and the depth-of-discharge trade"
+  ],
+  "scales_linearly_with_this_uncertainty": [
+   "absolute generated power in W",
+   "absolute harvested energy in Wh",
+   "required array area for a given load",
+   "sustainable payload power in W"
+  ]
  },
  "accelerators": [
   {

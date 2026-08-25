@@ -24,7 +24,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from solarsim.hardware import (
     ACCELERATORS,
     ACCELERATOR_BY_KEY,
+    PANEL_TECH,
+    RADIATORS,
     battery_dod_tradeoff,
+    check_against_reference,
+    generation_uncertainty,
+    make_platform,
     Platform,
     duty_cycled_alternative,
     marginal_cost,
@@ -59,7 +64,10 @@ def build(platform: Platform) -> dict:
             "radiator_kg_per_m2": platform.radiator_kg_per_m2,
             "housekeeping_w": platform.eps.housekeeping_w,
             "dod_limit": platform.eps.dod_limit,
+            "cell_efficiency": platform.eps.cell_efficiency,
         },
+        "external_calibration": check_against_reference(platform),
+        "generation_uncertainty": generation_uncertainty(),
         "accelerators": [
             {
                 "key": a.key, "name": a.name, "vendor": a.vendor, "class": a.class_,
@@ -197,12 +205,19 @@ def main(argv=None) -> int:
     ap.add_argument("--orbit", default="sso_1030", choices=sorted(ARRAY_FOR_ORBIT))
     ap.add_argument("--all", action="store_true", help="print every orbit")
     ap.add_argument("--bus-kg", type=float, default=None)
+    ap.add_argument("--panel", default="research_grade", choices=sorted(PANEL_TECH))
+    ap.add_argument("--radiator", default="body_mounted", choices=sorted(RADIATORS))
+    ap.add_argument("--uncertainty", action="store_true",
+                    help="print the term-by-term generation uncertainty budget")
+    ap.add_argument("--calibration", action="store_true",
+                    help="print the check against published AI1 figures")
     ap.add_argument("--dod", action="store_true",
                     help="battery mass vs cycle life for an always-on load")
     ap.add_argument("--no-write", action="store_true")
     args = ap.parse_args(argv)
 
-    data = build(Platform())
+    platform = make_platform(panel=args.panel, radiator=args.radiator)
+    data = build(platform)
     orbits = sorted(ARRAY_FOR_ORBIT) if args.all else [args.orbit]
     for i, k in enumerate(orbits):
         if i:
@@ -212,6 +227,41 @@ def main(argv=None) -> int:
             print_dod(data, k)
         if args.bus_kg is not None:
             print_budget(data, k, args.bus_kg)
+
+    if args.uncertainty:
+        u = data["generation_uncertainty"]
+        print(f"\ngeneration uncertainty, term by term:")
+        print(f"  {'term':18s} {'status':10s} {'x low':>7s} {'x high':>7s}")
+        for r in u["terms"]:
+            print(f"  {r['term']:18s} {r['status']:10s} "
+                  f"{r['relative_low']:7.3f} {r['relative_high']:7.3f}")
+        print(f"  assumed coefficients together: "
+              f"{u['assumed_multiplier_low']:.2f}x .. {u['assumed_multiplier_high']:.2f}x "
+              f"(all-wrong-together corner; cell efficiency dominates)")
+        print("  this is a pure scale factor, so it cancels from every ratio:")
+        for line in u["invariant_under_this_uncertainty"]:
+            print(f"    unchanged: {line}")
+
+    if args.calibration:
+        c = data["external_calibration"]
+        print(f"\ncalibration against {c['reference']}  [{c['kind']}]")
+        print(f"  array    model {c['array']['model_bol_w_per_m2']:.0f} W/m2 BOL "
+              f"vs stated {c['array']['reference_w_per_m2']:.0f} "
+              f"({c['array']['ratio_bol']:.2f}x); their density implies a "
+              f"{c['array']['implied_cell_efficiency']:.0%} cell")
+        print(f"  radiator model {c['radiator']['model_w_per_m2']:.0f} W/m2 "
+              f"vs stated {c['radiator']['reference_w_per_m2']:.0f} "
+              f"({c['radiator']['ratio']:.2f}x)")
+        print(f"  their radiator capacity is {c['radiator']['capacity_over_array']:.2f}x "
+              f"their array power -- sized to reject all of it")
+        ref_wkg = c["specific_power"]["reference_w_per_kg"]
+        for name in ("sso_dawn_dusk", "sso_1030"):
+            if name in data["orbits"]:
+                got = data["orbits"][name]["cost_per_always_on_watt"]["w_per_kg"]
+                print(f"  specific power  model {got:.0f} W/kg (EPS+thermal only, "
+                      f"{name}) vs stated {ref_wkg:.0f} W/kg (whole spacecraft)"
+                      f"  -> {ref_wkg/got:.1f}x")
+        print(f"  {c['specific_power']['note']}")
 
     s = data["sensitivity_h100_sxm_sso_1030"]
     print(f"\nsensitivity (H100 SXM, SSO 10:30): nominal {s['nominal_kg']:.0f} kg, "

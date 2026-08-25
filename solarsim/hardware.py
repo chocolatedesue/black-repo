@@ -411,11 +411,17 @@ def sensitivity(
     whether a conclusion survives the assumptions or depends on them.
     """
     base = base or Platform()
+    # The radiator *class* (body-mounted vs deployable liquid) is a design
+    # choice, not an uncertainty, and the two differ by more than 5x -- so it is
+    # reported separately rather than swept.  Within a class the spread is about
+    # +-40 %, which is what the relative bounds below express.
     sweeps = {
         "battery_wh_per_kg": (90.0, 160.0),
         "array_w_per_kg": (60.0, 150.0),
-        "radiator_w_per_m2": (150.0, 350.0),
-        "radiator_kg_per_m2": (3.0, 6.0),
+        "radiator_w_per_m2": (0.6 * base.radiator_w_per_m2,
+                              1.4 * base.radiator_w_per_m2),
+        "radiator_kg_per_m2": (0.75 * base.radiator_kg_per_m2,
+                               1.5 * base.radiator_kg_per_m2),
     }
     nominal = size_always_on(accel, marginal_cost(summary, array_model, base), base)
     out = {"nominal_kg": nominal["eps_thermal_kg"], "spans": {}}
@@ -502,3 +508,275 @@ def battery_dod_tradeoff(
             "years_to_eol": life / cycles_per_year if cycles_per_year else float("inf"),
         })
     return rows
+
+
+# ---------------------------------------------------------------------------
+# External calibration: what industry actually builds
+# ---------------------------------------------------------------------------
+
+#: Published or company-stated figures for real orbital-compute hardware, used
+#: to calibrate the platform coefficients above rather than to validate the
+#: simulation.  These are *claims from product announcements and regulatory
+#: filings*, not measured flight telemetry, and are labelled as such.  They are
+#: the only external anchor available: neither SpaceX nor Google publishes
+#: array power for an operational satellite.
+EXTERNAL_REFERENCES = {
+    "spacex_ai1": {
+        "label": "SpaceX AI1 orbital compute satellite (announced 2026)",
+        "kind": "company claim, product unveiling",
+        "array_power_kw": 150.0,
+        "array_w_per_m2": 250.0,          # stated areal density
+        "array_area_m2": 600.0,           # implied, 150 kW / 250 W/m^2
+        "radiator_area_m2": 110.0,
+        "radiator_w_per_m2": 1400.0,      # stated; double-sided, knife-edge to sun
+        "compute_mean_kw": 120.0,
+        "compute_peak_kw": 150.0,
+        "specific_power_w_per_kg": 70.0,  # stated as 70 kW per tonne, whole spacecraft
+        "wingspan_m": 70.0,
+        "note": (
+            "The radiator's stated capacity, 110 m^2 x 1400 W/m^2 = 154 kW, is "
+            "sized to the full 150 kW array -- an independent confirmation that "
+            "in vacuum the radiator is sized by the same number as the array."
+        ),
+    },
+    "starlink_v2_mini": {
+        "label": "Starlink V2 Mini (operational)",
+        "kind": "array area published; power NOT published",
+        "array_area_m2": 104.96,          # two wings of 52.48 m^2
+        "array_power_kw": None,
+        "note": (
+            "At SpaceX's own stated 250 W/m^2 the array would produce about "
+            "26 kW peak.  That is an inference from two SpaceX numbers, not a "
+            "published figure, and is quoted as such."
+        ),
+    },
+}
+
+
+#: Radiator options.  The default elsewhere in this module is the conservative
+#: body-mounted panel; a purpose-built orbital-compute satellite does far
+#: better, and the difference is large enough to change conclusions.
+RADIATORS = {
+    "body_mounted": {
+        "w_per_m2": 250.0, "kg_per_m2": 4.0,
+        "note": "Single-sided panel on the bus, ~40 C, LEO sink. Conservative.",
+    },
+    "deployable_liquid": {
+        "w_per_m2": 1400.0, "kg_per_m2": 6.0,
+        "note": (
+            "Pumped-loop deployable, radiating from both faces, held knife-edge "
+            "to the Sun. Calibrated to the AI1 figure; 1400 W/m^2 is 700 per "
+            "face, which is a 69 C surface at eps = 0.9 -- entirely physical."
+        ),
+    },
+}
+
+
+#: Array technology.  ``research_grade`` is this study's default: a 30 %
+#: triple-junction GaAs array of the kind flown on science and Earth-observation
+#: missions.  ``commercial_megaconstellation`` is back-solved from SpaceX's
+#: stated 250 W/m^2, which implies a ~22 % cell -- optimised for cost per watt
+#: and production rate rather than watts per square metre.  Which one a paper
+#: should assume depends entirely on who is imagined to be building the
+#: satellite, and the two differ by 16 % in absolute power.
+PANEL_TECH = {
+    "research_grade": {
+        "cell_efficiency": 0.30, "packing_factor": 0.90,
+        "note": "Triple-junction GaAs, e.g. Spectrolab XTJ / Azur 3G30.",
+    },
+    "commercial_megaconstellation": {
+        "cell_efficiency": 0.22, "packing_factor": 0.90,
+        "note": "Back-solved from SpaceX's stated 250 W/m^2 BOL areal density.",
+    },
+}
+
+
+def make_platform(
+    panel: str = "research_grade",
+    radiator: str = "body_mounted",
+    battery_wh_per_kg: float = 130.0,
+    array_w_per_kg: float = 100.0,
+    **eps_overrides,
+) -> Platform:
+    """Build a :class:`Platform` from named technology choices."""
+    p = PANEL_TECH[panel]
+    r = RADIATORS[radiator]
+    eps = PowerSystem(
+        cell_efficiency=p["cell_efficiency"],
+        packing_factor=p["packing_factor"],
+        **eps_overrides,
+    )
+    return Platform(
+        battery_wh_per_kg=battery_wh_per_kg,
+        array_w_per_kg=array_w_per_kg,
+        radiator_w_per_m2=r["w_per_m2"],
+        radiator_kg_per_m2=r["kg_per_m2"],
+        eps=eps,
+    )
+
+
+def check_against_reference(platform: Optional[Platform] = None) -> dict:
+    """Compare this model's generation chain with the AI1 published figures.
+
+    This is a *calibration* check, not a validation of the simulation: it tests
+    the engineering coefficients, which are assumptions, against what a company
+    says it is building.  A large disagreement means the assumptions describe a
+    different class of spacecraft, not that the orbital mechanics are wrong.
+    """
+    platform = platform or Platform()
+    ref = EXTERNAL_REFERENCES["spacex_ai1"]
+    eps = platform.eps
+
+    model_bol = (
+        SOLAR_CONSTANT * eps.cell_efficiency * eps.packing_factor * eps.ppt_efficiency
+    )
+    model_eol = model_bol * eps.degradation_bol_eol
+    return {
+        "reference": ref["label"],
+        "kind": ref["kind"],
+        "array": {
+            "reference_w_per_m2": ref["array_w_per_m2"],
+            "model_bol_w_per_m2": model_bol,
+            "model_eol_w_per_m2": model_eol,
+            "ratio_bol": model_bol / ref["array_w_per_m2"],
+            "implied_cell_efficiency": ref["array_w_per_m2"]
+            / (SOLAR_CONSTANT * eps.packing_factor * eps.ppt_efficiency),
+        },
+        "radiator": {
+            "reference_w_per_m2": ref["radiator_w_per_m2"],
+            "model_w_per_m2": platform.radiator_w_per_m2,
+            "ratio": platform.radiator_w_per_m2 / ref["radiator_w_per_m2"],
+            "reference_capacity_kw": ref["radiator_area_m2"]
+            * ref["radiator_w_per_m2"] / 1e3,
+            "reference_array_kw": ref["array_power_kw"],
+            "capacity_over_array": (
+                ref["radiator_area_m2"] * ref["radiator_w_per_m2"] / 1e3
+                / ref["array_power_kw"]
+            ),
+        },
+        "specific_power": {
+            "reference_w_per_kg": ref["specific_power_w_per_kg"],
+            "note": (
+                "The remaining gap after array and radiator technology are "
+                "matched sits in specific mass: this model uses 100 W/kg for "
+                "the array and 130 Wh/kg for the battery, which are the "
+                "literature figures for conventional deployable hardware. A "
+                "claim of 70 W/kg for a whole spacecraft requires an array "
+                "several times lighter per watt than that. The gap is left "
+                "open rather than tuned away -- it is the difference between "
+                "what is documented and what is announced."
+            ),
+        },
+        "note": ref["note"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Where the uncertainty actually lives
+# ---------------------------------------------------------------------------
+
+#: Term-by-term uncertainty in ``P_gen = nu . S . A . eta_cell . f_pack .
+#: f_deg . eta_ppt . kappa``.  Each entry is (nominal, low, high, status,
+#: source).  ``status`` is the honest label: *measured* for a physical constant,
+#: *validated* for something this package reproduces against a closed form or an
+#: almanac, *modelled* for something computed from a stated physical model, and
+#: *assumed* for an engineering coefficient taken from the literature.
+GENERATION_BUDGET = {
+    "solar_constant": (
+        1.0, 0.9996, 1.0004, "measured",
+        "1361 +- 0.5 W/m^2 total solar irradiance, Kopp & Lean (2011), TIM/SORCE.",
+    ),
+    "sun_distance": (
+        1.0, 0.9668, 1.0344, "modelled",
+        "+-3.3 % annual 1/r^2 modulation; ephemeris validated against almanac "
+        "perihelion and aphelion distances. Not an error -- a real seasonal signal.",
+    ),
+    "occultation_nu": (
+        1.0, 1.0, 1.0, "validated",
+        "Reproduces the closed-form cylindrical eclipse fraction to ~1e-16 under "
+        "its own assumptions; durations are grid-free by bisection.",
+    ),
+    "pointing_kappa": (
+        1.0, 0.99, 1.0, "modelled",
+        "Exact given the attitude model. The band allows for real pointing error "
+        "and drive backlash, which the kinematics do not represent.",
+    ),
+    "cell_efficiency": (
+        0.30, 0.22, 0.32, "assumed",
+        "Technology choice, not measurement error: 30-32 % for triple-junction "
+        "GaAs, ~22 % implied by SpaceX's stated 250 W/m^2 areal density.",
+    ),
+    "packing_factor": (
+        0.90, 0.85, 0.93, "assumed",
+        "Cell area over substrate area; depends on cell geometry and layout.",
+    ),
+    "degradation": (
+        0.85, 0.75, 0.92, "assumed",
+        "End-of-life radiation and UV. 0.85 is conservative for a 5-year mission "
+        "at 550 km, where the radiation environment is benign compared with the "
+        "belts; it would be right for a longer mission or a higher altitude.",
+    ),
+    "ppt_efficiency": (
+        0.93, 0.90, 0.96, "assumed",
+        "MPPT and PCDU conversion.",
+    ),
+    "temperature": (
+        1.0, 0.927, 0.970, "modelled",
+        "Array temperature from the lumped radiative balance in solarsim.thermal, "
+        "with the cell's linear coefficient. Costs 3.0-7.3 % of annual harvested "
+        "energy across the swept optics range; off by default.",
+    ),
+}
+
+
+def generation_uncertainty() -> dict:
+    """Decompose the generation uncertainty, and show what it does *not* touch.
+
+    The point of this function is the last field it returns.  Every uncertain
+    term in the chain is a *constant multiplicative factor* on power: none of
+    them depends on time, orbit, beta angle, plane or schedule.  So they cancel
+    exactly out of every ratio the study reports -- duty cycles, the LTAN
+    comparison, plane-to-plane spread, scheduling headroom, the relative cost of
+    an always-on watt between orbits.  They move only absolute watts, and they
+    move them by exactly the factor you got wrong.
+
+    That is why the study's conclusions are quoted as ratios.  A reader who
+    disagrees with the 30 % cell can scale every absolute number in one
+    multiplication and change no conclusion.
+    """
+    lo = hi = 1.0
+    rows = []
+    for name, (nom, low, high, status, src) in GENERATION_BUDGET.items():
+        rel_lo, rel_hi = low / nom, high / nom
+        if status == "assumed":
+            lo *= rel_lo
+            hi *= rel_hi
+        rows.append({
+            "term": name, "nominal": nom, "low": low, "high": high,
+            "relative_low": rel_lo, "relative_high": rel_hi,
+            "status": status, "source": src,
+        })
+    return {
+        "terms": rows,
+        "assumed_multiplier_low": lo,
+        "assumed_multiplier_high": hi,
+        "assumed_span_pct": 100.0 * (hi - lo),
+        "geometry_status": (
+            "validated to ~1e-16 against the closed form; grid-independent"
+        ),
+        "invariant_under_this_uncertainty": [
+            "eclipse and sunlit durations",
+            "duty cycle and eclipse fraction",
+            "LTAN and altitude comparisons (ratios of harvested energy)",
+            "plane-to-plane spread in a constellation",
+            "scheduling headroom (LP optimum over constant-draw bound)",
+            "relative cost of an always-on watt between orbits",
+            "battery cycles per year and the depth-of-discharge trade",
+        ],
+        "scales_linearly_with_this_uncertainty": [
+            "absolute generated power in W",
+            "absolute harvested energy in Wh",
+            "required array area for a given load",
+            "sustainable payload power in W",
+        ],
+    }
