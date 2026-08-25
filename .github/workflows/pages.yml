@@ -44,9 +44,11 @@ jobs:
           cp results/*.json _site/data/
           touch _site/.nojekyll
 
+      # Pages must already be enabled with "GitHub Actions" as the source
+      # (Settings -> Pages).  The workflow token cannot create the Pages site
+      # itself -- enablement: true fails with "Resource not accessible by
+      # integration" -- so that switch is a one-time manual step.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
