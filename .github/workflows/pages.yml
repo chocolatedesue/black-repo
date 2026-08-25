@@ -1,0 +1,63 @@
+# Rebuild the report from the committed results and publish it to GitHub Pages.
+#
+# The verification suite runs first and the job fails if any check fails, so the
+# published page can never be generated from a model that does not validate.
+name: Publish report
+
+on:
+  push:
+    branches: [claude/solar-illumination-model-lbdy03]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install numpy
+
+      - name: Verify the model
+        run: python -m experiments.validate
+
+      - name: Rebuild the report from results/
+        run: python -m experiments.build_page
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site/data
+          cp web/index.html _site/index.html
+          cp results/*.json _site/data/
+          touch _site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
