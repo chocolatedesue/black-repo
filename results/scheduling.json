@@ -16,17 +16,24 @@
         "p_gen_max_w": 571.5202512352224,
         "eclipse_slot_fraction": 0.37855072463768114,
         "energy_generated_wh": 1704.8222300489215,
-        "energy_housekeeping_wh": 215.5
+        "energy_housekeeping_wh": 215.5,
+        "p_house_mean_w": 45.0,
+        "p_house_max_w": 45.0,
+        "contact_slot_fraction": null
       },
       "sustainable": {
         "sustainable_payload_w": 233.15830195174695,
         "feasible": true,
         "p_gen_mean_w": 356.12028050561827,
         "housekeeping_w": 45.0,
+        "housekeeping_max_w": 45.0,
         "energy_balance_bound_w": 233.15830195174695,
         "dod_bound_w": 245.07904710614622,
         "binding_constraint": "energy_balance",
-        "naive_estimate_w": 311.12028050561827
+        "naive_estimate_w": 311.12028050561827,
+        "horizon_revolutions": 3.0001660975671047,
+        "periodicity_valid": true,
+        "periodicity_note": null
       },
       "burst": [
         {
@@ -116,10 +123,10 @@
       ],
       "optimal": {
         "success": true,
-        "mean_payload_w": 309.6818201274009,
+        "mean_payload_w": 309.68182012740294,
         "constant_draw_bound_w": 233.15830195174695,
-        "headroom_pct": 32.82041322787246,
-        "energy_wh": 1483.8920547771295,
+        "headroom_pct": 32.820413227873324,
+        "energy_wh": 1483.892054777139,
         "peak_payload_w": 526.5202512352224
       },
       "optimal_payload_w": [
@@ -1786,9 +1793,9 @@
         526.445,
         526.445,
         526.445,
+        503.557,
         526.445,
         0.0,
-        503.557,
         0.0,
         0.0,
         0.0,
@@ -1860,10 +1867,10 @@
       "compute_yield_optimal": {
         "unit": "inference",
         "joules_per_unit": 2.5,
-        "sustainable_payload_w": 309.6818201274009,
-        "units_per_second": 123.87272805096036,
-        "units_per_orbit": 711815.8669049457,
-        "units_per_day": 10702603.703602975
+        "sustainable_payload_w": 309.68182012740294,
+        "units_per_second": 123.87272805096117,
+        "units_per_orbit": 711815.8669049504,
+        "units_per_day": 10702603.703603046
       },
       "battery_wh": 600.0,
       "dod_limit": 0.3,
@@ -1884,17 +1891,24 @@
         "p_gen_max_w": 600.8536988479335,
         "eclipse_slot_fraction": 0.25565217391304346,
         "energy_generated_wh": 2036.9470393343845,
-        "energy_housekeeping_wh": 215.5
+        "energy_housekeeping_wh": 215.5,
+        "p_house_mean_w": 45.0,
+        "p_house_max_w": 45.0,
+        "contact_slot_fraction": null
       },
       "sustainable": {
         "sustainable_payload_w": 349.352650680702,
         "feasible": true,
         "p_gen_mean_w": 425.45028250783383,
         "housekeeping_w": 45.0,
+        "housekeeping_max_w": 45.0,
         "energy_balance_bound_w": 349.352650680702,
         "dod_bound_w": 373.6494277441174,
         "binding_constraint": "energy_balance",
-        "naive_estimate_w": 380.45028250783383
+        "naive_estimate_w": 380.45028250783383,
+        "horizon_revolutions": 3.0001660975671047,
+        "periodicity_valid": true,
+        "periodicity_note": null
       },
       "burst": [
         {
@@ -1984,10 +1998,10 @@
       ],
       "optimal": {
         "success": true,
-        "mean_payload_w": 379.49793136858653,
+        "mean_payload_w": 379.4979313685878,
         "constant_draw_bound_w": 349.352650680702,
-        "headroom_pct": 8.628897084120425,
-        "energy_wh": 1818.4275878078104,
+        "headroom_pct": 8.62889708412078,
+        "energy_wh": 1818.4275878078165,
         "peak_payload_w": 555.8536988479335
       },
       "optimal_payload_w": [
@@ -3677,8 +3691,8 @@
         542.606,
         543.252,
         543.884,
-        544.502,
-        63.56,
+        62.956,
+        545.106,
         0.0,
         0.0,
         0.0,
@@ -3728,10 +3742,10 @@
       "compute_yield_optimal": {
         "unit": "inference",
         "joules_per_unit": 2.5,
-        "sustainable_payload_w": 379.49793136858653,
-        "units_per_second": 151.7991725474346,
-        "units_per_orbit": 872290.9497710695,
-        "units_per_day": 13115448.50809835
+        "sustainable_payload_w": 379.4979313685878,
+        "units_per_second": 151.79917254743512,
+        "units_per_orbit": 872290.9497710724,
+        "units_per_day": 13115448.508098394
       },
       "battery_wh": 600.0,
       "dod_limit": 0.3,
@@ -3752,17 +3766,24 @@
         "p_gen_max_w": 526.0447988304052,
         "eclipse_slot_fraction": 0.367595818815331,
         "energy_generated_wh": 1593.2468635794803,
-        "energy_housekeeping_wh": 215.125
+        "energy_housekeeping_wh": 215.125,
+        "p_house_mean_w": 45.0,
+        "p_house_max_w": 45.0,
+        "contact_slot_fraction": null
       },
       "sustainable": {
         "sustainable_payload_w": 254.90497504445386,
         "feasible": true,
         "p_gen_mean_w": 333.38819929821574,
         "housekeeping_w": 45.0,
+        "housekeeping_max_w": 45.0,
         "energy_balance_bound_w": 256.70984444509037,
         "dod_bound_w": 254.90497504445386,
         "binding_constraint": "depth_of_discharge",
-        "naive_estimate_w": 288.38819929821574
+        "naive_estimate_w": 288.38819929821574,
+        "horizon_revolutions": 3.000636523731372,
+        "periodicity_valid": true,
+        "periodicity_note": null
       },
       "burst": [
         {
@@ -3852,11 +3873,11 @@
       ],
       "optimal": {
         "success": true,
-        "mean_payload_w": 286.99240562746587,
+        "mean_payload_w": 286.99240562746775,
         "constant_draw_bound_w": 254.90497504445386,
-        "headroom_pct": 12.58799698884503,
-        "energy_wh": 1372.7803402513784,
-        "peak_payload_w": 481.0108549307737
+        "headroom_pct": 12.587996988845763,
+        "energy_wh": 1372.7803402513873,
+        "peak_payload_w": 481.01138443289665
       },
       "optimal_payload_w": [
         480.172,
@@ -5516,8 +5537,8 @@
         481.009,
         481.01,
         481.01,
+        167.24,
         481.011,
-        167.241,
         0.0,
         0.0,
         0.0,
@@ -5593,10 +5614,10 @@
       "compute_yield_optimal": {
         "unit": "inference",
         "joules_per_unit": 2.5,
-        "sustainable_payload_w": 286.99240562746587,
-        "units_per_second": 114.79696225098635,
-        "units_per_orbit": 658412.2084479243,
-        "units_per_day": 9918457.538485222
+        "sustainable_payload_w": 286.99240562746775,
+        "units_per_second": 114.7969622509871,
+        "units_per_orbit": 658412.2084479285,
+        "units_per_day": 9918457.538485285
       },
       "battery_wh": 600.0,
       "dod_limit": 0.3,

@@ -60,3 +60,27 @@ def jd_to_datetime(jd: float) -> _dt.datetime:
 def days_since_j2000(jd) -> "float | np.ndarray":
     """Days elapsed since the J2000.0 epoch."""
     return np.asarray(jd, dtype=float) - JD_J2000
+
+
+def gmst_rad(jd) -> np.ndarray:
+    """Greenwich mean sidereal time [rad], reduced to [0, 2pi).
+
+    IAU 1982 series in the form given by Vallado (2013) eq. 3-47, evaluated in
+    Julian centuries from J2000.0.  Accurate to well under an arcsecond over the
+    span of this study, which corresponds to a few metres of ground track -- far
+    below what a ground-station access calculation with a whole-degree elevation
+    mask can resolve.
+
+    UT1 is again approximated by UTC.  The resulting error is bounded by |DUT1|
+    < 0.9 s, i.e. under 0.004 deg of Earth rotation, which shifts an access
+    window boundary by well under a second.
+    """
+    t = days_since_j2000(jd) / 36525.0
+    sec = (
+        67310.54841
+        + (876600.0 * 3600.0 + 8640184.812866) * t
+        + 0.093104 * t**2
+        - 6.2e-6 * t**3
+    )
+    deg = np.mod(sec / 240.0, 360.0)          # 1 s of time = 1/240 deg
+    return np.deg2rad(deg)

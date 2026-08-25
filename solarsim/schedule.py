@@ -34,7 +34,7 @@ from typing import Optional, Sequence
 import numpy as np
 
 from .attitude import ARRAY_MODELS
-from .constants import SOLAR_CONSTANT
+from .constants import ALBEDO_MEAN, EARTH_IR_MEAN, SOLAR_CONSTANT
 from .orbit import CircularOrbit, orbit_normal
 from .power import PowerSystem
 from .shadow import illumination_fraction
@@ -48,11 +48,38 @@ class PowerTrace:
     t_s: np.ndarray              # seconds from epoch
     nu: np.ndarray               # fractional illumination in [0, 1]
     p_gen_w: np.ndarray          # array output
-    p_house_w: float             # constant housekeeping draw
+    p_house_w: "float | np.ndarray"
+    """Housekeeping draw: a scalar, or a per-slot series.
+
+    A scalar is the historical behaviour and is what
+    :class:`solarsim.power.PowerSystem` alone can express.  Passing a series --
+    as :func:`power_trace` does when given a :class:`solarsim.load.LoadModel` --
+    lets the demand vary through the orbit, which matters because the largest
+    housekeeping loads (survival heaters, the downlink transmitter) are switched
+    rather than continuous, and the heaters switch on precisely when generation
+    is zero.  Everything downstream reads :attr:`p_house_series`, so both forms
+    take the same code path and a scalar gives bit-identical results to before.
+    """
     dt_s: float
     nodal_period_s: float
     system: PowerSystem
     label: str = ""
+    in_contact: Optional[np.ndarray] = None   # ground-station visibility, if modelled
+    load: object = None                       # the LoadModel used, if any
+    panel_temperature_k: Optional[np.ndarray] = None   # array temperature, if modelled
+    thermal_info: Optional[dict] = None                # its diagnostics
+
+    @property
+    def p_house_series(self) -> np.ndarray:
+        """Housekeeping draw as a full-length array, whatever form it was given in."""
+        return np.broadcast_to(
+            np.asarray(self.p_house_w, dtype=float), self.t_s.shape
+        )
+
+    @property
+    def p_house_mean_w(self) -> float:
+        """Orbit-average housekeeping draw."""
+        return float(np.mean(self.p_house_series))
 
     @property
     def p_surplus_w(self) -> np.ndarray:
@@ -60,7 +87,7 @@ class PowerTrace:
 
         Negative during eclipse: that deficit must come out of the battery.
         """
-        return self.p_gen_w - self.p_house_w
+        return self.p_gen_w - self.p_house_series
 
     @property
     def eclipsed(self) -> np.ndarray:
@@ -71,18 +98,28 @@ class PowerTrace:
         return float(np.trapezoid(power_w, dx=self.dt_s) / 3600.0)
 
     def to_csv(self, path) -> None:
-        """Write the trace as CSV: one row per scheduling slot."""
-        header = "t_s,nu,eclipsed,p_gen_w,p_house_w,p_surplus_w"
-        rows = np.column_stack([
+        """Write the trace as CSV: one row per scheduling slot.
+
+        A trace carrying ground-station visibility gains an ``in_contact``
+        column, so a scheduler reading the CSV can see the downlink windows that
+        drive the housekeeping spikes rather than having to infer them.
+        """
+        cols = [
             self.t_s,
             np.round(self.nu, 6),
             self.eclipsed.astype(int),
             np.round(self.p_gen_w, 4),
-            np.full(self.t_s.size, self.p_house_w),
+            np.round(self.p_house_series, 4),
             np.round(self.p_surplus_w, 4),
-        ])
-        np.savetxt(path, rows, delimiter=",", header=header, comments="",
-                   fmt=["%.1f", "%.6f", "%d", "%.4f", "%.2f", "%.4f"])
+        ]
+        header = "t_s,nu,eclipsed,p_gen_w,p_house_w,p_surplus_w"
+        fmt = ["%.1f", "%.6f", "%d", "%.4f", "%.4f", "%.4f"]
+        if self.in_contact is not None:
+            cols.append(np.asarray(self.in_contact).astype(int))
+            header += ",in_contact"
+            fmt.append("%d")
+        np.savetxt(path, np.column_stack(cols), delimiter=",", header=header,
+                   comments="", fmt=fmt)
 
     def summary(self) -> dict:
         n_orbits = self.t_s[-1] / self.nodal_period_s
@@ -96,8 +133,12 @@ class PowerTrace:
             "p_gen_max_w": float(np.max(self.p_gen_w)),
             "eclipse_slot_fraction": float(np.mean(self.eclipsed)),
             "energy_generated_wh": self.energy_wh(self.p_gen_w),
-            "energy_housekeeping_wh": self.energy_wh(
-                np.full_like(self.p_gen_w, self.p_house_w)
+            "energy_housekeeping_wh": self.energy_wh(self.p_house_series),
+            "p_house_mean_w": self.p_house_mean_w,
+            "p_house_max_w": float(np.max(self.p_house_series)),
+            "contact_slot_fraction": (
+                None if self.in_contact is None
+                else float(np.mean(np.asarray(self.in_contact, dtype=bool)))
             ),
         }
 
@@ -109,6 +150,13 @@ def power_trace(
     dt_s: float = 10.0,
     h_atm: float = 90.0,
     label: str = "",
+    load: Optional["LoadModel"] = None,
+    stations: Optional[Sequence] = None,
+    thermal: bool = False,
+    panel: Optional["ThermalPanel"] = None,
+    cell: Optional["CellThermalResponse"] = None,
+    albedo: float = ALBEDO_MEAN,
+    earth_ir: float = EARTH_IR_MEAN,
 ) -> PowerTrace:
     """Sample generated power on a uniform grid, ready for slot-based scheduling.
 
@@ -116,6 +164,21 @@ def power_trace(
     ramp adequately and gives a few hundred slots per orbit; coarser slots are
     fine for planning horizons of days, since the eclipse boundary is the only
     fast feature.
+
+    Two optional refinements, both off by default so that the historical results
+    reproduce unchanged:
+
+    ``load``
+        A :class:`solarsim.load.LoadModel`, which replaces the flat
+        ``system.housekeeping_w`` with a per-slot demand: heaters keyed to the
+        shadow function, and the transmitter keyed to visibility of ``stations``
+        (defaulting to :data:`solarsim.load.DEFAULT_NETWORK`).  Pass
+        ``stations=()`` to model the heaters alone with the transmitter off.
+
+    ``thermal``
+        Integrate the array's temperature along the trace and derate generation
+        by the cell's measured temperature coefficient, instead of assuming every
+        cell sits at its 28 C rating.  See :mod:`solarsim.thermal`.
     """
     system = system or PowerSystem()
     if system.array_model not in ARRAY_MODELS:
@@ -137,15 +200,63 @@ def power_trace(
 
     p_gen = system.array_gain_w * nu * scale * kappa
 
+    t_panel = None
+    thermal_info = None
+    if thermal:
+        from .thermal import (
+            CellThermalResponse,
+            ThermalPanel,
+            earth_fluxes,
+            panel_temperature,
+        )
+        panel = panel or ThermalPanel()
+        cell = cell or CellThermalResponse(eta_ref=system.cell_efficiency)
+
+        # Flux on the *cell face*, per unit array area.  The solar term is the
+        # same nu.S.kappa product that drives generation, so the array runs
+        # coolest exactly where it produces least.  The Earth terms are scaled by
+        # the cosine between the array normal and nadir; for a sun-tracking wing
+        # that is the complement of the Sun-nadir geometry, and taking its
+        # magnitude covers the rear face seeing Earth instead of the front.
+        q_solar = SOLAR_CONSTANT * nu * scale * kappa
+        q_alb_nadir, q_ir_nadir = earth_fluxes(r_sat, r_sun, albedo, earth_ir)
+        r_hat = r_sat / np.linalg.norm(r_sat, axis=-1, keepdims=True)
+        cos_nadir = np.abs(np.sum(-r_hat * s_hat, axis=-1))
+        q_alb = q_alb_nadir * cos_nadir
+        q_ir = q_ir_nadir * cos_nadir
+
+        t_panel, thermal_info = panel_temperature(
+            t, q_solar, q_alb, q_ir, panel=panel, cell=cell,
+            extraction_factor=system.packing_factor * system.degradation_bol_eol,
+        )
+        p_gen = p_gen * cell.derate_at(t_panel)
+
+    in_contact = None
+    if load is not None:
+        from .load import DEFAULT_NETWORK, contact_mask
+        stations = DEFAULT_NETWORK if stations is None else stations
+        eclipsed = nu < 1.0
+        if len(stations):
+            in_contact = contact_mask(r_sat, jd, stations)
+        else:
+            in_contact = np.zeros(t.shape, dtype=bool)
+        p_house = load.profile_w(eclipsed, in_contact)
+    else:
+        p_house = system.housekeeping_w
+
     return PowerTrace(
         t_s=t,
         nu=nu,
         p_gen_w=p_gen,
-        p_house_w=system.housekeeping_w,
+        p_house_w=p_house,
         dt_s=dt_s,
         nodal_period_s=T,
         system=system,
         label=label or f"h={orbit.altitude_km:.0f}km",
+        in_contact=in_contact,
+        load=load,
+        panel_temperature_k=t_panel,
+        thermal_info=thermal_info,
     )
 
 
@@ -162,12 +273,12 @@ def _soc_trajectory(trace: "PowerTrace", p_payload: float):
     sys = trace.system
     cap = sys.battery_capacity_wh
     dt_h = trace.dt_s / 3600.0
-    demand = sys.housekeeping_w + p_payload
+    house = trace.p_house_series
 
     b = cap
     lowest = cap
-    for g in trace.p_gen_w:
-        delta = g - demand
+    for g, h in zip(trace.p_gen_w, house):
+        delta = g - (h + p_payload)
         step = (delta * sys.charge_efficiency if delta > 0.0
                 else delta / sys.discharge_efficiency)
         b = min(cap, max(0.0, b + step * dt_h))
@@ -195,9 +306,32 @@ def sustainable_power(trace: PowerTrace) -> dict:
     Both are evaluated by simulating the state of charge, so the exact shape of
     the generation profile is respected rather than assumed square, and charge
     saturation is accounted for.
+
+    .. warning::
+
+       The energy-neutrality test is *only meaningful over a whole number of
+       revolutions*, and it fails quietly rather than loudly if that is not what
+       it is given.  The test asks whether the battery ends at least as charged
+       as it started; on a horizon ending mid-sunlight the battery has just been
+       topped up, so an inflated draw passes, and on one ending mid-eclipse no
+       draw at all passes and the orbit is declared infeasible.  On the reference
+       orbit a horizon of 15.04 revolutions -- an innocent-looking ``86400 / T``
+       -- returns 247 W against the correct 233 W, and reports the wrong binding
+       constraint into the bargain.
+
+       ``horizon_revolutions`` and ``periodicity_valid`` are therefore returned
+       with every result, and the caller should check them.  Any whole number of
+       revolutions from 3 upwards gives the same answer to within 0.5 %.
     """
     sys = trace.system
     floor = sys.battery_capacity_wh * (1.0 - sys.dod_limit)
+
+    n_rev = float(trace.t_s[-1] / trace.nodal_period_s)
+    # One slot of slack: the trace grid rarely lands exactly on the nodal period,
+    # and being off by a single sample is harmless.
+    rev_tol = max(2.0 * trace.dt_s / trace.nodal_period_s, 1e-6)
+    frac = abs(n_rev - round(n_rev))
+    periodicity_valid = bool(frac <= rev_tol)
 
     def feasible(p: float) -> bool:
         final, lowest = _soc_trajectory(trace, p)
@@ -207,10 +341,17 @@ def sustainable_power(trace: PowerTrace) -> dict:
         return {
             "sustainable_payload_w": 0.0,
             "feasible": False,
-            "deficit_w": float(sys.housekeeping_w - np.mean(trace.p_gen_w)),
+            "deficit_w": float(trace.p_house_mean_w - np.mean(trace.p_gen_w)),
+            "horizon_revolutions": n_rev,
+            "periodicity_valid": periodicity_valid,
+            "periodicity_note": (
+                None if periodicity_valid else
+                "horizon is not a whole number of revolutions; the energy-"
+                "neutrality test is phase-dependent and this result is unsafe"
+            ),
         }
 
-    hi0 = float(np.max(trace.p_gen_w)) + sys.housekeeping_w
+    hi0 = float(np.max(trace.p_gen_w)) + trace.p_house_mean_w
 
     def bisect(test) -> float:
         lo, hi = 0.0, hi0
@@ -234,7 +375,8 @@ def sustainable_power(trace: PowerTrace) -> dict:
         "sustainable_payload_w": p_star,
         "feasible": True,
         "p_gen_mean_w": float(np.mean(trace.p_gen_w)),
-        "housekeeping_w": sys.housekeeping_w,
+        "housekeeping_w": trace.p_house_mean_w,
+        "housekeeping_max_w": float(np.max(trace.p_house_series)),
         "energy_balance_bound_w": p_energy,
         "dod_bound_w": p_dod,
         "binding_constraint": "depth_of_discharge" if p_dod <= p_energy
@@ -242,7 +384,14 @@ def sustainable_power(trace: PowerTrace) -> dict:
         # The estimate a study gets from "orbit-average generation minus
         # housekeeping".  It ignores both the round-trip loss on stored energy
         # and the depth-of-discharge limit, so it is optimistic on both counts.
-        "naive_estimate_w": float(np.mean(trace.p_gen_w)) - sys.housekeeping_w,
+        "naive_estimate_w": float(np.mean(trace.p_gen_w)) - trace.p_house_mean_w,
+        "horizon_revolutions": n_rev,
+        "periodicity_valid": periodicity_valid,
+        "periodicity_note": (
+            None if periodicity_valid else
+            "horizon is not a whole number of revolutions; the energy-neutrality "
+            "test is phase-dependent and this result is unsafe"
+        ),
     }
 
 
@@ -261,8 +410,9 @@ def burst_envelope(
     sys = trace.system
     usable_wh = sys.battery_capacity_wh * sys.dod_limit
     out = []
+    house = trace.p_house_series
     for p in payload_levels_w:
-        demand = sys.housekeeping_w + p
+        demand = house + p
         deficit = np.clip(demand - trace.p_gen_w, 0.0, None) / sys.discharge_efficiency
         if not np.any(deficit > 0.0):
             out.append({
@@ -402,7 +552,7 @@ def optimal_schedule(trace: PowerTrace, weights: Optional[np.ndarray] = None) ->
     )
 
     A_eq = vstack([balance, recursion, periodic], format="csr")
-    b_eq = np.concatenate([G - sys_.housekeeping_w, rhs_recursion, [cap]])
+    b_eq = np.concatenate([G - trace.p_house_series, rhs_recursion, [cap]])
 
     bounds = [(0.0, None)] * (3 * K) + [(floor, cap)] * K
 

@@ -14,6 +14,7 @@
       <a href="#s4">4 &middot; Scheduling form</a>
       <a href="#s5">5 &middot; The trace</a>
       <a href="#s6">6 &middot; What to skip</a>
+      <a href="#s7">7 &middot; Intensity &amp; consumption</a>
     </nav>
     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch colour theme">THEME</button>
   </div>
@@ -30,6 +31,7 @@
     </p>
     <div class="byline">
       <span>Reference platform <b>2 m&sup2; array &middot; 600 Wh &middot; 45 W bus</b></span>
+      <span>Bus load <b>flat in &sect;&sect;&nbsp;1&ndash;6, resolved in &sect;&nbsp;7</b></span>
       <span>Traces <b>3 orbits &middot; 10 s slots</b></span>
       <span>Epoch <b id="bl-epoch">&mdash;</b></span>
     </div>
@@ -306,7 +308,9 @@ env   = burst_envelope(trace, [400, 600, 900])</div>
     <div class="sec-head"><span class="sec-no">&sect; 6</span><h2>What to leave out, and why</h2></div>
     <p class="lede">
       Refinements that are real physics but wrong for this paper. Each is listed
-      with what it would cost you and what it would buy.
+      with what it would cost you and what it would buy. Three of them have since
+      been measured rather than estimated, and two of those turned out to be worth
+      keeping &mdash; they are marked, and &sect;&nbsp;7 reports what they do.
     </p>
     <div class="callout">
       <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
@@ -326,7 +330,10 @@ env   = burst_envelope(trace, [400, 600, 900])</div>
         The pattern: every one of these scales P<sub>gen</sub> by a factor that is
         roughly constant across the schedules being compared. A scheduling result
         expressed as a <em>ratio</em> against a baseline is nearly invariant to
-        them &mdash; which is the strongest argument for reporting ratios.
+        them &mdash; which is the strongest argument for reporting ratios. That
+        argument is now tested rather than asserted: &sect;&nbsp;7 models the top
+        three rows properly and moves the absolute payload power by
+        &minus;6&nbsp;% while the headroom ratio moves by under a point.
       </div>
     </div>
 
@@ -337,8 +344,10 @@ env   = burst_envelope(trace, [400, 600, 900])</div>
         geometry. GMAT (NASA, open source) and Orekit (Apache&nbsp;2.0) both carry
         validated eclipse detectors. Reproducing the eclipse durations with either
         and reporting the agreement costs an afternoon and answers the
-        &ldquo;how do we know your energy input is right&rdquo; question far more
-        directly than any amount of added thermal modelling.
+        &ldquo;how do we know your energy input is right&rdquo; question more
+        directly than added power modelling does. That remains true even now the
+        thermal and load models of &sect;&nbsp;7 exist: they change the absolute
+        watts, but the eclipse geometry is what everything downstream multiplies.
       </p>
 
       <h3>Reproducing this</h3>
@@ -346,6 +355,131 @@ env   = burst_envelope(trace, [400, 600, 900])</div>
 
     <div class="eq">python -m experiments.validate        <span class="c"># model verification, exits non-zero on failure</span>
 python -m experiments.export_traces   <span class="c"># traces + scheduling bounds</span>
+python -m experiments.build_page      <span class="c"># this page</span></div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s7">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 7</span><h2>Energy intensity, and where it is consumed</h2></div>
+    <p class="lede">
+      Two corrections that &sect;&nbsp;6 provisionally set aside, now measured
+      rather than estimated: the array does not run at its rating, and the bus
+      load is not a constant. Both move the absolute numbers by several percent.
+      Neither moves the case for scheduling &mdash; which is the useful result.
+    </p>
+
+    <div class="callout">
+      <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
+      &#20004;&#20214;&#20107;&#65306;&#19968;&#26159;&#38451;&#20809;&#26377;&#22810;&#23569;&#30495;&#27491;&#21464;&#25104;&#20102;&#30005;&#65288;&#30005;&#27744;&#26495;&#26159;&#28909;&#30340;&#65292;&#25928;&#29575;&#27604;&#38134;&#29260;&#20302;&#32422;&nbsp;4&nbsp;%&#65289;&#65292;
+      &#20108;&#26159;&#36825;&#20123;&#30005;&#21040;&#24213;&#34987;&#35841;&#28040;&#32791;&#25481;&#20102;&#65288;&#21152;&#28909;&#22120;&#21482;&#22312;&#26106;&#39135;&#26399;&#24320;&#65292;&#21457;&#23556;&#26426;&#21482;&#22312;&#36807;&#31449;&#26102;&#24320;&#65289;&#12290;
+      &#20851;&#38190;&#32467;&#35770;&#65306;&#36127;&#36733;&#30340;&#8220;&#24418;&#29366;&#8221;&#20250;&#25289;&#20302;&#24904;&#21151;&#29575;&#22522;&#32447;&#65292;&#21364;&#20960;&#20046;&#19981;&#24433;&#21709;&nbsp;LP&nbsp;&#26368;&#20248;&#20540;&#65292;&#25152;&#20197;&#35843;&#24230;&#30340;&#25910;&#30410;&#21482;&#20250;&#21464;&#22823;&#12289;&#19981;&#20250;&#21464;&#23567;&#12290;
+    </div>
+
+    <div class="prose">
+      <h3>The chain, extended</h3>
+      <p>
+        The generation model of &sect;&nbsp;1 assumes a fixed cell efficiency. A
+        real array is a deliberately good absorber of sunlight and a mediocre
+        radiator, so it settles well above its 28&nbsp;&deg;C rating, and a
+        triple-junction cell loses about 0.25&nbsp;% of its maximum-power point
+        per kelvin. Adding a lumped-node radiative balance &mdash; direct solar,
+        albedo, Earth infrared in; emission from both faces and the extracted
+        electrical power out &mdash; gives the temperature the cells actually run
+        at, and with it the efficiency they actually deliver.
+      </p>
+      <p>
+        The transient matters as much as the equilibrium. The panel's radiative
+        time constant is a few minutes against an eclipse of tens of minutes, so
+        it is still cold for a while after sunrise &mdash; briefly <em>more</em>
+        efficient than its rating &mdash; and still warm for a while after entering
+        shadow. Integrating that is what gets both signs right.
+      </p>
+      <p>
+        Albedo and Earth infrared turn out not to be optional once temperature is
+        modelled at all. They contribute no useful photocurrent, but they are a
+        third of the panel's thermal input; leaving them out puts the sunlit array
+        below its rating and turns a real loss into an apparent bonus. The two
+        refinements are a package or neither.
+      </p>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 5</span>
+          <span class="fig-title">Generation, panel temperature and the shaped bus load</span>
+        </div>
+        <div class="controls" id="loadControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="loadLegend"></div>
+        <div id="loadChart"></div>
+      </div>
+      <div class="fig-note" id="loadNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 5</span>
+          <span class="fig-title">Where every watt-hour goes, over one day on the reference orbit</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="ledgerTable"></div></div>
+      <div class="fig-note" id="ledgerNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 6</span>
+          <span class="fig-title">What the corrections do to the bounds</span>
+        </div>
+        <div class="controls" id="corrControls"></div>
+      </div>
+      <div class="fig-body"><div id="corrTable"></div></div>
+      <div class="fig-note" id="corrNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 7</span>
+          <span class="fig-title">What the derate rests on</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="sensTable"></div></div>
+      <div class="fig-note">
+        The temperature coefficient is vendor- and lot-specific and this study
+        cannot measure it, so it is swept rather than asserted. Across the range
+        published for qualified triple-junction space cells the energy penalty
+        runs from about 3&nbsp;% to 7&nbsp;%. The <em>ratio</em> between the
+        constant-draw baseline and the scheduled optimum moves by under a
+        percentage point across that whole span.
+      </div>
+    </div>
+
+    <div class="prose">
+      <h3>A trap worth naming</h3>
+      <p>
+        The constant-draw bound is solved by requiring the battery to end a
+        horizon at least as charged as it began. That test is only meaningful
+        over a <em>whole number of revolutions</em>. Give it 86&nbsp;400&nbsp;/&nbsp;T
+        seconds &mdash; 15.04 revolutions on this orbit, an entirely natural thing
+        to write &mdash; and the window ends mid-sunlight on a just-topped-up
+        battery, the bound comes back 5&nbsp;% high, and it reports the wrong
+        binding constraint. The model now returns
+        <span class="mono">periodicity_valid</span> with every bound, and the
+        verification suite asserts both that whole-revolution horizons agree and
+        that a fractional one is flagged.
+      </p>
+
+      <h3>Reproducing this section</h3>
+    </div>
+
+    <div class="eq">python -m experiments.run_energy       <span class="c"># E8: intensity, load, ledgers, corrected bounds</span>
 python -m experiments.build_page      <span class="c"># this page</span></div>
   </div>
 </section>
@@ -362,8 +496,10 @@ python -m experiments.build_page      <span class="c"># this page</span></div>
         (solar ephemeris, conical and fractional shadow). Vallado,
         <em>Fundamentals of Astrodynamics and Applications</em>, 4th ed., &sect;5.3 and
         &sect;9.6. Kopp &amp; Lean, <em>Geophys. Res. Lett.</em> 38 (2011) L01706 (total
-        solar irradiance). Anderson, Justus &amp; Batts, NASA/TM-2001-211221
-        (near-Earth thermal environment &mdash; needed only if you model albedo).
+        solar irradiance). Anderson, Justus &amp; Batts, NASA/TM-2001-211221 and
+        ECSS-E-ST-10-04C (near-Earth thermal environment: albedo and outgoing
+        longwave radiation, used in &sect;&nbsp;7). Gilmore, <em>Spacecraft Thermal
+        Control Handbook</em>, Vol.&nbsp;I, Ch.&nbsp;2&ndash;3 (radiative balance).
       </p>
       <p style="margin-top:14px">
         Companion to the illumination study. Generated from the

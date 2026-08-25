@@ -47,7 +47,7 @@ class SlotContext:
     soc_floor_wh: float           # depth-of-discharge floor
     capacity_wh: float
     p_gen_w: float                # generation in this slot
-    p_house_w: float
+    p_house_w: float              # housekeeping draw *in this slot*, not the mean
 
     @property
     def headroom_wh(self) -> float:
@@ -117,6 +117,8 @@ def run_policy(trace: PowerTrace, policy: Policy, name: str = "policy") -> Polic
     floor = cap * (1.0 - sys_.dod_limit)
     dt_h = trace.dt_s / 3600.0
 
+    house = trace.p_house_series
+
     n = trace.t_s.size
     payload = np.zeros(n)
     soc = np.zeros(n)
@@ -130,12 +132,12 @@ def run_policy(trace: PowerTrace, policy: Policy, name: str = "policy") -> Polic
         ctx = SlotContext(
             trace=trace, system=sys_, soc_wh=b, soc_floor_wh=floor,
             capacity_wh=cap, p_gen_w=float(trace.p_gen_w[k]),
-            p_house_w=sys_.housekeeping_w,
+            p_house_w=float(house[k]),
         )
         p = max(0.0, float(policy(k, ctx)))
         payload[k] = p
 
-        delta = trace.p_gen_w[k] - (sys_.housekeeping_w + p)
+        delta = trace.p_gen_w[k] - (house[k] + p)
         if delta >= 0.0:
             raw = b + delta * sys_.charge_efficiency * dt_h
             if raw > cap:

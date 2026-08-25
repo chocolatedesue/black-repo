@@ -13,6 +13,12 @@ V3  Shadow geometry        -- numerical eclipse fraction against the closed-form
 V4  Numerical convergence  -- eclipse duration as a function of the sampling
                               density, and sensitivity to the assumed opaque
                               atmosphere height and to the shadow model.
+V5  Energy chain            -- sidereal time against a worked example, Earth
+                              view factors and radiative equilibrium against
+                              their closed forms, exact closure of the energy
+                              ledger, and a no-regression check that the
+                              constant-load path is unchanged by the addition
+                              of the time-varying one.
 
 Run with ``python -m experiments.validate``; a non-zero exit status means a
 check failed.
@@ -45,9 +51,25 @@ from solarsim.shadow import (
     illumination_cylindrical,
     illumination_fraction,
 )
+from solarsim.load import DEFAULT_NETWORK, GroundStation, LoadModel, elevation_deg
+from solarsim.power import PowerSystem, energy_ledger
+from solarsim.schedule import optimal_schedule, power_trace, sustainable_power
 from solarsim.simulate import simulate_orbit
 from solarsim.solar import solar_declination, sun_unit_and_range
-from solarsim.timeutil import datetime_to_jd
+from solarsim.thermal import (
+    ABS_ZERO_C,
+    CellThermalResponse,
+    ThermalPanel,
+    earth_fluxes,
+    earth_view_factor,
+)
+from solarsim.constants import (
+    ALBEDO_MEAN,
+    EARTH_IR_MEAN,
+    SOLAR_CONSTANT,
+    STEFAN_BOLTZMANN,
+)
+from solarsim.timeutil import datetime_to_jd, gmst_rad
 
 RESULTS = Path(__file__).resolve().parents[1] / "results"
 RESULTS.mkdir(exist_ok=True)
@@ -337,6 +359,148 @@ def v4_convergence() -> None:
     check("Penumbra duration is a small correction", pen, 16.0, 8.0, "s")
 
 
+# ---------------------------------------------------------------------------
+# V5  Energy chain: sidereal time, radiative environment, ledger closure
+# ---------------------------------------------------------------------------
+def v5_energy_chain() -> None:
+    print("\nV5  Energy chain")
+
+    # -- Sidereal time against Vallado's worked example (2013, example 3-5).
+    # Ground-station access, and therefore the transmitter duty cycle, is only
+    # as good as the Earth-rotation angle underneath it.
+    jd = datetime_to_jd(dt.datetime(1992, 8, 20, 12, 14, 0))
+    check("GMST at 1992-08-20 12:14 UT1", math.degrees(float(gmst_rad(jd))),
+          152.578787, 1e-4, "deg")
+
+    # -- Earth view factor against its closed form, at the horizon and far away.
+    # F = (R/r)^2 must go to 1 at the surface and fall off as r^-2.
+    check("Earth view factor at the surface", float(earth_view_factor(R_EARTH)),
+          1.0, 1e-12, "-")
+    check("Earth view factor at r = 2 R", float(earth_view_factor(2 * R_EARTH)),
+          0.25, 1e-12, "-")
+
+    # -- Albedo vanishes on the night side and peaks at the sub-solar point.
+    # A spacecraft directly between Sun and Earth sees the fully lit hemisphere;
+    # one in Earth's shadow sees none of it, and a model that leaks albedo onto
+    # the night side would warm the array during eclipse and understate the
+    # efficiency recovery that makes the post-sunrise transient worth modelling.
+    r_sun = np.array([AU, 0.0, 0.0])
+    r_day = np.array([R_EARTH + 550.0, 0.0, 0.0])       # sub-solar point
+    r_night = np.array([-(R_EARTH + 550.0), 0.0, 0.0])  # anti-solar point
+    q_a_day, q_ir_day = earth_fluxes(r_day, r_sun)
+    q_a_night, q_ir_night = earth_fluxes(r_night, r_sun)
+    f = float(earth_view_factor(R_EARTH + 550.0))
+    check("Albedo at the sub-solar point", float(q_a_day),
+          ALBEDO_MEAN * SOLAR_CONSTANT * f, 1e-9, "W/m2")
+    check("Albedo at the anti-solar point", float(q_a_night), 0.0, 1e-12, "W/m2")
+    check("Earth IR is isotropic (day)", float(q_ir_day), EARTH_IR_MEAN * f,
+          1e-9, "W/m2")
+    check("Earth IR is isotropic (night)", float(q_ir_night), EARTH_IR_MEAN * f,
+          1e-9, "W/m2")
+
+    # -- Radiative equilibrium against the closed form it solves.
+    panel = ThermalPanel()
+    q = 1000.0
+    t_eq = float(panel.equilibrium_temperature_k(q))
+    emitted = (panel.eps_front + panel.eps_back) * STEFAN_BOLTZMANN * t_eq**4
+    check("Radiative equilibrium closes", emitted, q, 1e-9, "W/m2")
+
+    # -- The temperature coefficient is exactly neutral at the rating.
+    cell = CellThermalResponse()
+    check("Cell derate at the 28 C rating", float(cell.derate_at(28.0 - ABS_ZERO_C)),
+          1.0, 1e-12, "-")
+    # ... and its slope is the declared coefficient, checked over 100 K so a
+    # sign error or a factor of 100 cannot hide inside the tolerance.
+    d100 = float(cell.derate_at(128.0 - ABS_ZERO_C))
+    check("Cell derate slope over 100 K", (d100 - 1.0) / 100.0,
+          cell.temp_coeff_per_k, 1e-12, "1/K")
+
+    # -- Ground-station geometry: a station directly beneath the spacecraft sees
+    # it at the zenith, and one on the opposite side of the Earth does not see
+    # it at all.
+    st = GroundStation("subsat", 0.0, 0.0)
+    jd0 = datetime_to_jd(dt.datetime(2024, 1, 1))
+    theta = float(gmst_rad(jd0))
+    over = np.array([(R_EARTH + 550.0) * math.cos(theta),
+                     (R_EARTH + 550.0) * math.sin(theta), 0.0])
+    check("Elevation of an overhead pass", float(elevation_deg(over, jd0, st)),
+          90.0, 1e-6, "deg")
+    check("Elevation of an antipodal pass", float(elevation_deg(-over, jd0, st)),
+          -90.0, 1e-6, "deg")
+
+    # -- Ledger closure.  This is the strongest statement the energy model can
+    # make about itself: intercepted sunlight equals the sum of every loss and
+    # every delivered load, to machine precision, in each of the configurations
+    # the study uses.  A residual above rounding means energy is being created
+    # or destroyed somewhere in the chain.
+    jd0 = datetime_to_jd(dt.datetime(2024, 1, 1))
+    orb = CircularOrbit(550.0, sso_inclination(R_EARTH + 550.0),
+                        raan_from_ltan(jd0, 10.5), 0.0, jd0)
+    system = PowerSystem(array_model="single_axis_pitch")
+    for desc, kw in (
+        ("constant load", {}),
+        ("shaped load", {"load": LoadModel()}),
+        ("shaped load + thermal", {"load": LoadModel(), "thermal": True}),
+    ):
+        tr = power_trace(orb, system, n_orbits=2.0, dt_s=10.0, **kw)
+        led = energy_ledger(tr, payload_w=sustainable_power(tr)["sustainable_payload_w"])
+        check(f"Energy ledger closes ({desc})", led["residual_relative"],
+              0.0, 1e-12, "-")
+
+    # -- No regression.  Adding the time-varying load must leave the original
+    # constant-load results bit-identical; the values below are the committed
+    # ones from results/scheduling.json for the reference orbit.  If this drifts,
+    # every published number in the scheduling report has moved with it.
+    tr = power_trace(orb, system, n_orbits=3.0, dt_s=10.0)
+    sus = sustainable_power(tr)
+    check("Constant-load bound unchanged", sus["sustainable_payload_w"],
+          233.1583019517, 1e-9, "W")
+    try:
+        opt = optimal_schedule(tr)
+        check("LP optimum unchanged", opt["mean_payload_w"],
+              309.6818201274, 1e-6, "W")
+    except ImportError:
+        print("  [SKIP] LP optimum unchanged (SciPy not installed)")
+
+    # -- The energy-neutrality bound must be stable across whole-revolution
+    # horizons, and must flag itself as invalid on a fractional one.  This is a
+    # trap the model walked into during development: 86400/T is 15.04
+    # revolutions, and the bound it returns there is 5 % high with the wrong
+    # binding constraint, because the window ends mid-sunlight on a
+    # just-topped-up battery.
+    bounds = []
+    for n in (3, 5, 10, 15):
+        tr_n = power_trace(orb, system, n_orbits=float(n), dt_s=10.0)
+        s_n = sustainable_power(tr_n)
+        bounds.append(s_n["sustainable_payload_w"])
+        if not s_n["periodicity_valid"]:
+            _failures.append(f"whole-revolution horizon n={n} flagged invalid")
+    spread = 100.0 * (max(bounds) - min(bounds)) / np.mean(bounds)
+    check("Constant bound stable over whole-rev horizons", spread, 0.0, 0.5, "%")
+
+    tr_frac = power_trace(orb, system,
+                          n_orbits=86400.0 / orb.nodal_period_s, dt_s=10.0)
+    s_frac = sustainable_power(tr_frac)
+    check("Fractional horizon is flagged invalid",
+          float(not s_frac["periodicity_valid"]), 1.0, 1e-12, "bool")
+    # ... and it is flagged because it is genuinely wrong, not out of caution.
+    check("Fractional horizon really does mislead",
+          100.0 * (s_frac["sustainable_payload_w"] / np.mean(bounds) - 1.0),
+          5.0, 2.0, "%")
+
+    # -- The heaters must land in eclipse, not in sunlight.  This is the whole
+    # point of the shaped load, so it is worth asserting rather than trusting.
+    tr_load = power_trace(orb, system, n_orbits=3.0, dt_s=10.0,
+                          load=LoadModel(), stations=())
+    lm = LoadModel()
+    house = tr_load.p_house_series
+    ecl = tr_load.eclipsed
+    check("Housekeeping in eclipse", float(np.mean(house[ecl])),
+          lm.eclipse_quiescent_w(), 1e-9, "W")
+    check("Housekeeping in sunlight", float(np.mean(house[~ecl])),
+          lm.sunlit_quiescent_w(), 1e-9, "W")
+
+
 def _plane_for_beta(target_beta_deg: float, jd: float):
     """Find (inclination, RAAN) giving a requested beta angle at epoch `jd`.
 
@@ -367,6 +531,7 @@ def main() -> int:
     v2_sun_synchronous()
     v3_shadow_geometry()
     v4_convergence()
+    v5_energy_chain()
 
     print("\n" + "=" * 78)
     if _failures:

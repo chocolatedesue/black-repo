@@ -137,8 +137,8 @@ function burstAt(caseObj, multiple) {
     ["Occulting radius", "R⊕ + 90 km",
      "Atmosphere optically thick below ~90 km; Vallado §5.3. Sensitivity reported in the illumination study"],
     ["Array area", "2.0 m²", "Reference platform — replace with your bus"],
-    ["Cell efficiency η", "0.30 (BOL, AM0, 28 °C)",
-     "Typical triple-junction GaAs. PULL THE CURRENT DATASHEET (AzurSpace / Spectrolab / Rocket Lab) — this is a placeholder"],
+        ["Cell efficiency \u03b7", "0.30 (BOL, AM0, 28 \u00b0C)",
+     "Typical triple-junction GaAs. PULL THE CURRENT DATASHEET (AzurSpace / Spectrolab / Rocket Lab) - this is a placeholder, and \u00a7 7 shows the temperature coefficient that comes with it matters as much as the rating"],
     ["Packing factor", "0.90", "Cell area / substrate area; typical"],
     ["End-of-life factor", "0.85",
      "Lumped radiation + UV degradation. For a fluence-driven curve use ESA SPENVIS"],
@@ -147,7 +147,8 @@ function burstAt(caseObj, multiple) {
     ["Depth-of-discharge limit", "30 %",
      "LEO cycles ~5 500/year, which is what forces a low DoD; cell cycle-life curve"],
     ["Charge / discharge efficiency", "0.95 / 0.97", "Typical Li-ion round trip"],
-    ["Housekeeping load", "45 W", "Bus, ADCS, TT&C, thermal"],
+    ["Housekeeping load", "45 W flat",
+     "Bus, ADCS, TT&C, thermal, lumped. \u00a7 7 breaks this into subsystems and gives it a shape: 37 W sunlit, 45 W in eclipse (survival heaters), 87 W peak over a ground station"],
     ["Array pointing", "single-axis pitch or yaw",
      "κ = cos β for a pitch-axis drive; √(1-(ŝ·r̂)²) for a yaw-axis drive"],
   ];
@@ -356,8 +357,9 @@ function burstAt(caseObj, multiple) {
       ["nu", "—", "Fractional illumination in [0, 1]; 1 is full sun, 0 is umbra"],
       ["eclipsed", "0/1", "1 whenever nu < 1, i.e. penumbra counts as eclipsed"],
       ["p_gen_w", "W", "Array output. This is G[k] in the LP of §4"],
-      ["p_house_w", "W", "Constant housekeeping draw"],
+      ["p_house_w", "W", "Housekeeping draw in this slot. Constant in these traces; varies slot to slot when a load model is supplied (see \u00a7 7)"],
       ["p_surplus_w", "W", "p_gen_w - p_house_w; negative in shadow"],
+      ["in_contact", "0/1", "Present only on traces built with a ground-station network: 1 inside a downlink window, when the transmitter load applies"],
     ],
   });
   document.querySelectorAll("#schemaTable td:last-child")
@@ -374,12 +376,12 @@ function burstAt(caseObj, multiple) {
       { label: "Verdict for a scheduling paper", get: (r) => r[2] },
     ],
     rows: [
-      ["Earth albedo on the array", "up to +25 % on a nadir-facing panel at 550 km; near zero on a sun-tracking wing",
-       "Skip unless the platform is body-mounted. It scales P_gen by a near-constant factor, so scheduling ratios barely move"],
-      ["Array temperature", "−8 to −17 % depending on architecture",
-       "Skip. Fold it into the end-of-life factor and say so"],
-      ["Earth infrared on the array", "~200 W/m² incident, 0 W electrical",
-       "Skip for power outright — GaAs cuts off at ~870 nm, Earth IR peaks near 10 µm. It only matters through temperature"],
+            ["Array temperature", "measured: -3.9 % of annual energy on the reference orbit, -3.9 to -4.1 % across the three; -5.1 % at the January epoch",
+       "NO LONGER SKIPPED - modelled in \u00a7 7. It is a systematic, one-signed bias, but it scales P_gen almost uniformly, so ratios move under a point"],
+      ["Earth albedo and infrared on the array", "no photocurrent, but a third of the panel's thermal input",
+       "NO LONGER SKIPPED - and they cannot be skipped once temperature is modelled: excluding them puts the sunlit array at 26 C, below its rating, turning a 5 % loss into a 0.4 % bonus"],
+      ["Shape of the housekeeping load", "heaters +8 W in eclipse, transmitter +42 W over a station; bus peak 87 W against a 46 W mean",
+       "NO LONGER SKIPPED - modelled in \u00a7 7. It lowers the constant-draw baseline without touching the optimum, so it raises the headroom scheduling captures"],
       ["Radiation degradation vs time", "the 0.85 factor, resolved year by year",
        "Skip for a single-epoch study; add if the contribution is about multi-year operation"],
       ["Solar cycle in TSI", "±0.05 %", "Skip. It is 60× smaller than the annual orbital variation already modelled"],
@@ -388,5 +390,256 @@ function burstAt(caseObj, multiple) {
     ],
   });
   document.querySelectorAll("#skipTable td")
+    .forEach((el) => { el.style.whiteSpace = "normal"; });
+})();
+
+/* =============================================================================
+   Section 7 -- energy intensity and consumption (E8)
+   ============================================================================= */
+
+const E8 = D.e8;
+const E8KEYS = E8 && E8.bounds ? Object.keys(E8.bounds.cases) : [];
+
+/* -- Figure 5: generation, panel temperature, shaped load ------------------ */
+
+(function loadFig() {
+  if (!E8KEYS.length) return;
+  let sel = E8KEYS[0];
+  segmented(
+    document.getElementById("loadControls"),
+    E8KEYS.map((k) => ({ label: E8.bounds.cases[k].title, value: k })),
+    E8KEYS[0],
+    (v) => { sel = v; draw(); },
+    "Orbit"
+  );
+
+  function draw() {
+    const c = E8.bounds.cases[sel];
+    const lt = c.load_trace;
+    const xs = lt.t_s.map((t) => t / 60);
+    const xMax = xs[xs.length - 1];
+
+    // Shade eclipse; mark contact windows with a second, denser band so the
+    // transmitter spikes are attributable at a glance.
+    const spans = (flags, fill) => {
+      const out = [];
+      let start = null;
+      flags.forEach((f, i) => {
+        if (f && start === null) start = xs[i];
+        if (!f && start !== null) { out.push({ x0: start, x1: xs[i], fill }); start = null; }
+      });
+      if (start !== null) out.push({ x0: start, x1: xMax, fill });
+      return out;
+    };
+    const bands = spans(lt.eclipsed, cssVar("--eclipse-soft"))
+      .concat(spans(lt.in_contact, cssVar("--s3") + "22"));
+
+    legend(document.getElementById("loadLegend"), [
+      { label: "Generated, at the 28 °C rating", color: cssVar("--s1") },
+      { label: "Generated, at the temperature the array actually reaches", color: cssVar("--s2") },
+      { label: "Housekeeping demand", color: cssVar("--s3") },
+      { label: "Eclipse", color: cssVar("--eclipse") },
+    ]);
+
+    lineChart(document.getElementById("loadChart"), {
+      height: 330,
+      series: [
+        { name: "Generated (rated)", color: cssVar("--s1"),
+          points: xs.map((t, i) => [t, lt.p_gen_w[i]]), dash: "5 3" },
+        { name: "Generated (thermal)", color: cssVar("--s2"),
+          points: xs.map((t, i) => [t, lt.p_gen_thermal_w[i]]),
+          area: true, areaFill: cssVar("--s2"), areaOpacity: 0.12 },
+        { name: "Housekeeping", color: cssVar("--s3"),
+          points: xs.map((t, i) => [t, lt.p_house_w[i]]), width: 2 },
+      ],
+      bands,
+      xDomain: [0, xMax],
+      yDomain: [0, Math.max(...lt.p_gen_w) * 1.08],
+      xLabel: "Minutes from epoch",
+      yLabel: "Power  (W)",
+      fmtXTick: (t) => t.toFixed(0),
+      fmtYTick: (t) => t.toFixed(0),
+      fmtValue: (v) => `${v.toFixed(1)} W`,
+      fmtTipTitle: (t) => `t + ${t.toFixed(1)} min`,
+      ariaLabel: `Generation at rated and actual cell temperature, with the shaped housekeeping load, for ${c.title}`,
+    });
+
+    const th = E8.thermal ? E8.thermal[sel] : null;
+    const tmin = Math.min(...lt.panel_t_c), tmax = Math.max(...lt.panel_t_c);
+    document.getElementById("loadNote").innerHTML =
+      `<b>${c.title}</b>, ${c.array_model.replace(/_/g, " ")}, two revolutions at 30 s. ` +
+      `The panel swings from <b>${fmt(tmin, 0)} °C</b> to <b>${fmt(tmax, 0)} °C</b>; ` +
+      `the gap between the two generation curves is what that costs, ` +
+      (th ? `<b>${fmt(th.energy_penalty_pct, 1)} %</b> of annual harvested energy ` +
+            `averaged over the year (${fmt(100 * (1 - th.derate_max), 1)}&ndash;` +
+            `${fmt(100 * (1 - th.derate_min), 1)} % across it). ` : "") +
+      `Note where the curves <em>cross</em>: for a few minutes after each sunrise the ` +
+      `array is still cold and outperforms its own rating &mdash; a real effect, though ` +
+      `the size of that spike should be read with care, since it extrapolates a linear ` +
+      `temperature coefficient far below the range it is fitted over, and a real ` +
+      `regulator's tracking range may not follow the array up. It is a small ` +
+      `contribution to the integral either way. ` +
+      `The housekeeping trace steps up by the survival-heater load in shadow and spikes ` +
+      `by the transmitter load over a ground station (shaded green) &mdash; a peak of ` +
+      `<b>${fmt(c.configs.shaped.housekeeping_max_w, 0)} W</b> against a mean of ` +
+      `<b>${fmt(c.configs.shaped.housekeeping_mean_w, 1)} W</b>.`;
+  }
+  register(draw);
+})();
+
+/* -- Table 5: the energy ledger -------------------------------------------- */
+
+(function ledgerTable() {
+  if (!E8KEYS.length) return;
+  const c = E8.bounds.cases[E8KEYS[0]];
+  const L = c.configs.shaped_plus_thermal.ledger;
+  const inc = L.incident_wh;
+  const pct = (v) => `${(100 * Math.abs(v) / inc).toFixed(2)} %`;
+
+  // renderTable writes textContent, so every cell here is plain text.
+  const rows = [
+    ["Sunlight intercepted by the array", L.incident_wh, ""],
+    ["  less  substrate not covered by cells", -L.loss_packing_wh, "packing factor 0.90"],
+    ["  less  photons the cell cannot convert", -L.loss_conversion_wh, "at the 28 \u00b0C rating"],
+    ["  less  running above the rating", -L.loss_temperature_wh, "the correction this section adds"],
+    ["  less  radiation and UV degradation", -L.loss_degradation_wh, "end-of-life factor 0.85"],
+    ["  less  MPPT and PCDU conversion", -L.loss_ppt_wh, "efficiency 0.93"],
+    ["= Delivered to the bus", L.bus_generated_wh, ""],
+    ["  less  battery charge loss", -L.loss_charge_wh, "round trip, charging leg"],
+    ["  less  battery discharge loss", -L.loss_discharge_wh, "round trip, discharging leg"],
+    ["  less  shunted with the battery full", -L.curtailed_wh,
+     "not a hardware loss - energy the schedule failed to use"],
+    ["  less  consumed by housekeeping", -L.delivered_housekeeping_wh, "bus, ADCS, comms, heaters"],
+    ["  less  consumed by the payload", -L.delivered_payload_wh, "at the constant-draw bound"],
+    ["= Net change in stored energy", -L.stored_delta_wh, "zero over a whole number of revolutions"],
+  ];
+
+  renderTable(document.getElementById("ledgerTable"), {
+    caption: `${c.title} \u2014 ${fmt(c.horizon_hours, 1)} h (${fmtInt(c.n_orbits)} revolutions), shaped load and thermal derate`,
+    columns: [
+      { label: "Line", get: (r) => r[0] },
+      { label: "Wh", get: (r) => fmt(r[1], 1), numeric: true },
+      { label: "of incident", get: (r) => pct(r[1]), numeric: true },
+      { label: "Note", get: (r) => r[2] },
+    ],
+    rows,
+  });
+  document.querySelectorAll("#ledgerTable td:last-child")
+    .forEach((el) => { el.style.whiteSpace = "normal"; });
+  // The two subtotal rows carry the structure of the table; make them readable
+  // as such rather than as just two more lines.
+  document.querySelectorAll("#ledgerTable tbody tr").forEach((tr) => {
+    if (tr.firstChild.textContent.startsWith("=")) tr.style.fontWeight = "600";
+  });
+
+  document.getElementById("ledgerNote").innerHTML =
+    `Every line is computed, none transcribed; the residual between the intercepted ` +
+    `sunlight and the sum of the rest is <b>${(L.residual_relative).toExponential(1)}</b> ` +
+    `relative &mdash; machine precision, which is the point of keeping the ledger at all. ` +
+    `End to end, <b>${fmt(100 * L.end_to_end_efficiency, 1)} %</b> of the sunlight the array ` +
+    `intercepts reaches the payload. The line to read twice is the shunted energy: ` +
+    `<b>${fmt(100 * L.curtailed_fraction_of_generated, 1)} %</b> of everything the array ` +
+    `generates is thrown away because a constant draw cannot absorb it when it arrives. ` +
+    `That is the case for scheduling, stated as an accounting identity.`;
+})();
+
+/* -- Table 6: corrected bounds --------------------------------------------- */
+
+(function corrTable() {
+  if (!E8KEYS.length) return;
+  let sel = E8KEYS[0];
+  segmented(
+    document.getElementById("corrControls"),
+    E8KEYS.map((k) => ({ label: E8.bounds.cases[k].title, value: k })),
+    E8KEYS[0],
+    (v) => { sel = v; draw(); },
+    "Orbit"
+  );
+
+  const LABEL = {
+    legacy_constant_45w: "Flat 45 W bus (the earlier model)",
+    flat_at_shaped_mean: "Flat, at the shaped load's own mean",
+    shaped: "Shaped: heaters in eclipse, transmitter over stations",
+    shaped_plus_thermal: "Shaped, plus the thermal derate",
+  };
+
+  function draw() {
+    const c = E8.bounds.cases[sel];
+    const rows = Object.keys(LABEL).map((k) => [LABEL[k], c.configs[k]]);
+    renderTable(document.getElementById("corrTable"), {
+      caption: `${c.title} \u2014 ${fmt(c.horizon_hours, 1)} h, ${c.array_model.replace(/_/g, " ")}`,
+      columns: [
+        { label: "Load / generation model", get: (r) => r[0] },
+        { label: "Bus mean", get: (r) => `${fmt(r[1].housekeeping_mean_w, 1)} W`, numeric: true },
+        { label: "Bus peak", get: (r) => `${fmt(r[1].housekeeping_max_w, 0)} W`, numeric: true },
+        { label: "P_gen", get: (r) => `${fmt(r[1].p_gen_mean_w, 0)} W`, numeric: true },
+        { label: "Constant bound", get: (r) => `${fmt(r[1].constant_bound_w, 1)} W`, numeric: true },
+        { label: "LP optimum", get: (r) => `${fmt(r[1].lp_optimum_w, 1)} W`, numeric: true },
+        { label: "Headroom", get: (r) => `${fmt(r[1].headroom_pct, 1)} %`, numeric: true },
+        { label: "Shunted", get: (r) => `${fmt(100 * r[1].curtailed_fraction_of_generated, 1)} %`, numeric: true },
+      ],
+      rows,
+    });
+
+    const so = c.shape_only_effect, te = c.thermal_effect, ee = c.end_to_end;
+    document.getElementById("corrNote").innerHTML =
+      `<b>Shape, isolated from level.</b> Rows 2 and 3 draw the same mean bus power ` +
+      `(<b>${fmt(c.flat_equivalent_w, 1)} W</b>) and differ only in <em>when</em>. Giving the ` +
+      `load its real shape moves the constant-draw bound by ` +
+      `<b>${fmt(so.constant_bound_delta_pct, 1)} %</b> and the LP optimum by ` +
+      `<b>${fmt(so.lp_optimum_delta_pct, 1)} %</b>, so the headroom for scheduling goes from ` +
+      `<b>${fmt(so.headroom_pct_flat, 1)} %</b> to <b>${fmt(so.headroom_pct_shaped, 1)} %</b>. ` +
+      `The heaters land in eclipse, where the battery has to pay for them at the round-trip ` +
+      `efficiency and against the depth-of-discharge limit; a constant draw has to absorb that ` +
+      `and an optimised one does not. Modelling the load honestly makes scheduling look ` +
+      `<em>better</em>, not worse. ` +
+      `<b>Temperature.</b> The derate costs <b>${fmt(te.p_gen_delta_pct, 1)} %</b> of generation ` +
+      `and <b>${fmt(te.lp_optimum_delta_pct, 1)} %</b> of the optimum. ` +
+      `<b>End to end</b>, the achievable payload power falls from ` +
+      `<b>${fmt(ee.legacy_lp_optimum_w, 0)} W</b> to <b>${fmt(ee.corrected_lp_optimum_w, 0)} W</b> ` +
+      `(<b>${fmt(ee.delta_pct, 1)} %</b>) &mdash; a level shift that leaves every ratio in ` +
+      `&sect;&nbsp;3 essentially where it was.`;
+  }
+  register(draw);
+})();
+
+/* -- Table 7: what the derate rests on ------------------------------------- */
+
+(function sensTable() {
+  if (!E8 || !E8.sensitivity) return;
+  const sw = E8.sensitivity.sweeps;
+  const rows = [];
+  sw.temperature_coefficient.forEach((r) => rows.push([
+    "Cell temperature coefficient",
+    `${fmt(100 * r.temp_coeff_per_k, 2)} %/K`,
+    "\u2014",
+    `${fmt(r.energy_penalty_pct, 2)} %`,
+  ]));
+  sw.optical_properties.forEach((r) => rows.push([
+    "Panel optics",
+    `\u03b1 = ${r.alpha_solar}, \u03b5 = ${r.eps_front} / ${r.eps_back}  (${r.note})`,
+    `${fmt(r.t_sunlit_mean_c, 1)} \u00b0C`, `${fmt(r.energy_penalty_pct, 2)} %`,
+  ]));
+  sw.earth_flux.forEach((r) => rows.push([
+    "Albedo and Earth infrared", r.note,
+    `${fmt(r.t_sunlit_mean_c, 1)} \u00b0C`, `${fmt(r.energy_penalty_pct, 2)} %`,
+  ]));
+  sw.heat_capacity.forEach((r) => rows.push([
+    "Panel heat capacity",
+    `${fmtInt(r.heat_capacity_j_m2k)} J/m\u00b2K  (\u03c4 = ${fmt(r.time_constant_s, 0)} s)`,
+    `${fmt(r.t_sunlit_mean_c, 1)} \u00b0C`, `${fmt(100 * (1 - r.derate), 2)} %`,
+  ]));
+
+  renderTable(document.getElementById("sensTable"), {
+    caption: `${E8.sensitivity.case} \u2014 one parameter varied at a time about the baseline`,
+    columns: [
+      { label: "Parameter", get: (r) => r[0] },
+      { label: "Value", get: (r) => r[1] },
+      { label: "Sunlit mean", get: (r) => r[2], numeric: true },
+      { label: "Energy penalty", get: (r) => r[3], numeric: true },
+    ],
+    rows,
+  });
+  document.querySelectorAll("#sensTable td:nth-child(2)")
     .forEach((el) => { el.style.whiteSpace = "normal"; });
 })();

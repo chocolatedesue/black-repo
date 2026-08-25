@@ -51,6 +51,32 @@ SSO_NODAL_RATE = 2.0 * math.pi / (TROPICAL_YEAR_DAYS * SEC_PER_DAY)  # rad/s
 H_ATM_DEFAULT = 90.0         # km
 
 # ---------------------------------------------------------------------------
+# Radiative environment
+# ---------------------------------------------------------------------------
+# Stefan-Boltzmann constant (CODATA 2018, exact under the 2019 SI redefinition).
+STEFAN_BOLTZMANN = 5.670374419e-8   # W/(m^2 K^4)
+
+# Earth's radiation budget as seen by a spacecraft in LEO.  Both quantities are
+# strong functions of the sub-satellite point and of cloud cover; the values
+# here are the global annual means, which is the right choice for an energy
+# *budget* over many revolutions.  Worst-case thermal design uses the hot-case
+# values instead, and both are reported by the sensitivity study.
+#
+#   ALBEDO_MEAN   global annual mean Bond albedo of Earth
+#   EARTH_IR_MEAN global annual mean outgoing longwave radiation (OLR)
+#
+# The two are tied together by the planetary energy balance: an Earth in
+# equilibrium re-emits the fraction of the solar constant it does not reflect,
+# (1 - a) * S / 4 = 0.70 * 1361 / 4 = 238 W/m^2, which is where EARTH_IR_MEAN
+# comes from and why the pair must not be varied independently by much.
+# See ECSS-E-ST-10-04C (space environment) and Gilmore, *Spacecraft Thermal
+# Control Handbook*, Vol. I, Ch. 2.
+ALBEDO_MEAN = 0.30           # -
+ALBEDO_HOT = 0.35            # -,      hot-case design value
+EARTH_IR_MEAN = 237.0        # W/m^2,  global annual mean OLR
+EARTH_IR_HOT = 260.0         # W/m^2,  hot-case design value
+
+# ---------------------------------------------------------------------------
 # Derived helpers
 # ---------------------------------------------------------------------------
 DEG = math.pi / 180.0

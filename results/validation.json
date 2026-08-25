@@ -236,5 +236,181 @@
     "tolerance": 8.0,
     "unit": "s",
     "pass": true
+  },
+  {
+    "check": "GMST at 1992-08-20 12:14 UT1",
+    "value": 152.57878781051843,
+    "expected": 152.578787,
+    "tolerance": 0.0001,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "Earth view factor at the surface",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Earth view factor at r = 2 R",
+    "value": 0.25,
+    "expected": 0.25,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Albedo at the sub-solar point",
+    "value": 346.0462324770881,
+    "expected": 346.0462324770881,
+    "tolerance": 1e-09,
+    "unit": "W/m2",
+    "pass": true
+  },
+  {
+    "check": "Albedo at the anti-solar point",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "W/m2",
+    "pass": true
+  },
+  {
+    "check": "Earth IR is isotropic (day)",
+    "value": 200.8644552952973,
+    "expected": 200.8644552952973,
+    "tolerance": 1e-09,
+    "unit": "W/m2",
+    "pass": true
+  },
+  {
+    "check": "Earth IR is isotropic (night)",
+    "value": 200.8644552952973,
+    "expected": 200.8644552952973,
+    "tolerance": 1e-09,
+    "unit": "W/m2",
+    "pass": true
+  },
+  {
+    "check": "Radiative equilibrium closes",
+    "value": 1000.0,
+    "expected": 1000.0,
+    "tolerance": 1e-09,
+    "unit": "W/m2",
+    "pass": true
+  },
+  {
+    "check": "Cell derate at the 28 C rating",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Cell derate slope over 100 K",
+    "value": -0.0025,
+    "expected": -0.0025,
+    "tolerance": 1e-12,
+    "unit": "1/K",
+    "pass": true
+  },
+  {
+    "check": "Elevation of an overhead pass",
+    "value": 90.0,
+    "expected": 90.0,
+    "tolerance": 1e-06,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "Elevation of an antipodal pass",
+    "value": -90.0,
+    "expected": -90.0,
+    "tolerance": 1e-06,
+    "unit": "deg",
+    "pass": true
+  },
+  {
+    "check": "Energy ledger closes (constant load)",
+    "value": 1.7035891238979374e-15,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Energy ledger closes (shaped load)",
+    "value": 8.517945619489687e-16,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Energy ledger closes (shaped load + thermal)",
+    "value": 8.517945619489684e-16,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "-",
+    "pass": true
+  },
+  {
+    "check": "Constant-load bound unchanged",
+    "value": 233.15830195174695,
+    "expected": 233.1583019517,
+    "tolerance": 1e-09,
+    "unit": "W",
+    "pass": true
+  },
+  {
+    "check": "LP optimum unchanged",
+    "value": 309.68182012740294,
+    "expected": 309.6818201274,
+    "tolerance": 1e-06,
+    "unit": "W",
+    "pass": true
+  },
+  {
+    "check": "Constant bound stable over whole-rev horizons",
+    "value": 0.4064836787346886,
+    "expected": 0.0,
+    "tolerance": 0.5,
+    "unit": "%",
+    "pass": true
+  },
+  {
+    "check": "Fractional horizon is flagged invalid",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "bool",
+    "pass": true
+  },
+  {
+    "check": "Fractional horizon really does mislead",
+    "value": 4.901908733445115,
+    "expected": 5.0,
+    "tolerance": 2.0,
+    "unit": "%",
+    "pass": true
+  },
+  {
+    "check": "Housekeeping in eclipse",
+    "value": 45.0,
+    "expected": 45.0,
+    "tolerance": 1e-09,
+    "unit": "W",
+    "pass": true
+  },
+  {
+    "check": "Housekeeping in sunlight",
+    "value": 37.0,
+    "expected": 37.0,
+    "tolerance": 1e-09,
+    "unit": "W",
+    "pass": true
   }
 ]

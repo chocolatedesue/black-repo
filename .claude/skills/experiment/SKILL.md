@@ -16,10 +16,12 @@ the rest is mechanical.
 |---|---|---|
 | Physics | `solarsim/shadow.py`, `orbit.py`, `solar.py`, `geometry.py` | The model itself is wrong or incomplete |
 | Attitude | `solarsim/attitude.py` | A new solar-array pointing architecture |
-| Power | `solarsim/power.py` | EPS parameters or sizing logic |
+| Power | `solarsim/power.py` | EPS parameters, sizing logic, or the energy ledger |
+| Thermal | `solarsim/thermal.py` | Array temperature, cell temperature coefficient, albedo / Earth IR |
+| Load | `solarsim/load.py` | Subsystem power budget, ground-station network, what draws power when |
 | Constellations | `solarsim/constellation.py` | A new Walker pattern or phasing rule |
 | Scheduling | `solarsim/schedule.py`, `evaluate.py` | Bounds, traces, or policy scoring |
-| Experiments | `experiments/run_study.py` (E1–E6), `run_profiles.py` (E7), `export_traces.py` | A new case, sweep, or output file |
+| Experiments | `experiments/run_study.py` (E1–E6), `run_profiles.py` (E7), `run_energy.py` (E8), `export_traces.py` | A new case, sweep, or output file |
 | Report | `web/*.template.html` + `web/app*.js` | A new figure or table |
 | Assembly | `experiments/build_page.py` | A new page, or a new field the page needs |
 
@@ -101,3 +103,41 @@ fails if it contains any. Use CSS escapes there if you ever need a symbol.
 **Rebuild and diff.** `git diff --stat results/` after a rerun should show only
 the files you meant to change. An unexpected diff is the repository telling you
 a shared parameter moved.
+
+**Keep the default path numerically frozen.** The energy model has two opt-in
+refinements — a time-varying `LoadModel` and the `thermal=True` array
+temperature — and both are *off* by default precisely so that everything
+published before them still reproduces. `validate.py` asserts the constant-load
+bounds to 1e-9 W. If you change a default in `PowerSystem`, `ThermalPanel`,
+`CellThermalResponse` or `LoadModel`, that check will fail, and the fix is to
+decide deliberately whether every committed number should move — not to update
+the constant in the test.
+
+## Two traps in the energy model
+
+**The bound needs a whole number of revolutions.** `sustainable_power` decides
+energy neutrality by asking whether the battery ends the horizon as charged as
+it began. On a fractional horizon that test is phase-dependent: ending
+mid-sunlight passes an inflated draw, ending mid-eclipse declares the orbit
+infeasible. `86400 / T` is 15.04 revolutions and returns a bound 5 % high with
+the wrong binding constraint. Use `round(86400 / T)`, and check the
+`periodicity_valid` flag that comes back with every result.
+
+**Ground contact needs a full day.** The ground track only repeats on the order
+of a day, so a three-orbit window lands on an unrepresentative number of passes
+— for the i = 53° case it contains *none*, which silently deletes the
+transmitter, the largest single housekeeping load, from the answer. Anything
+involving `in_contact` wants ~15 revolutions, not 3.
+
+## Adding a load or a thermal effect
+
+Both follow the same rule as the array models: add the parameter to the
+dataclass that owns it, with the reasoning and the provenance in the docstring
+next to the number. `LoadModel` keeps the *shape* of the load in
+`profile_w()` and its *accounting* in `breakdown_w()`; those two must agree, and
+`energy_ledger` will report a non-zero residual if they do not.
+
+If you add a loss term anywhere in the chain, add it to `energy_ledger` in the
+same commit. The ledger closing to machine precision is what makes the chain
+auditable, and a term that generates or destroys energy shows up there
+immediately — that is the check working, not a nuisance.

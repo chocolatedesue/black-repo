@@ -88,11 +88,54 @@ through eclipse and is reported infeasible at 120 W on the reference platform,
 which is exactly the tension a scheduler has to manage. Sweeping that floor
 shows what a latency target costs in feasible throughput.
 
+## Scoring against a realistic load, not a flat one
+
+`power_trace` takes two optional refinements, both off by default:
+
+```python
+trace = power_trace(orbit, system, n_orbits=15, dt_s=10.0,
+                    load=LoadModel(),   # heaters in eclipse, transmitter over stations
+                    thermal=True)       # array temperature and the cell derate
+```
+
+They matter for a policy comparison in opposite directions, and it is worth
+knowing which is which before quoting a number:
+
+- **The shaped load raises the value of scheduling.** Survival heaters switch on
+  in eclipse, so the load peaks exactly where generation is zero and the battery
+  has to pay round-trip efficiency plus depth-of-discharge for it. That lowers
+  the constant-draw baseline and leaves the LP optimum alone: on the reference
+  orbit the headroom goes from +32.7 % to +34.0 %, and at i = 53° from +13.4 %
+  to +17.3 %. A policy scored against a flat load is being scored against an
+  unrealistically *strong* baseline.
+- **The thermal derate lowers everything by about the same factor.** It costs
+  ~5 % of generation and ~6 % of the optimum, so ratios barely move. It changes
+  what you may claim in watts, not what you may claim in percent.
+
+The downlink windows are also now real: `trace.in_contact` marks them, and they
+are the natural place for a deadline- or coverage-driven policy to earn
+something the uniform-value problem cannot. That was listed above as the axis a
+contribution has to come from; the model now supplies it.
+
+**Two horizon traps, both of which produce plausible wrong numbers:**
+
+- Use a **whole number of revolutions**. `sustainable_power` tests energy
+  neutrality by whether the battery ends as charged as it began, which is
+  phase-dependent otherwise. `86400 / T` is 15.04 revolutions and returns a
+  bound 5 % high with the wrong binding constraint. Check `periodicity_valid`.
+- Any trace using `load=` wants **~15 revolutions, not 3**. A three-orbit window
+  contains an unrepresentative number of ground passes — none at all for
+  i = 53° — which deletes the transmitter from the comparison. That happens to
+  agree with the ten-orbit minimum this harness already requires for a different
+  reason.
+
 ## Changing the platform or orbit
 
 The bounds depend entirely on the platform. `PowerSystem` carries array area,
 cell efficiency, battery capacity, depth-of-discharge limit and housekeeping
-load; `power_trace` takes the orbit and the slot length. Every number in a
+load; `LoadModel` breaks that last one into subsystems if you want it shaped;
+`ThermalPanel` and `CellThermalResponse` carry the array's optics and its
+temperature coefficient; `power_trace` takes the orbit and the slot length. Every number in a
 result is specific to those, so report them alongside any scheduling claim. The
 companion report at `web/scheduling.html` has the parameter table with
 provenance for each value, including which ones are placeholders that must be
@@ -101,3 +144,9 @@ replaced with measurements before publication.
 The energy cost per unit of work — `JOULES_PER_INFERENCE` in
 `experiments/export_traces.py` — is a placeholder and cannot come from this
 model. It has to be measured on the target accelerator.
+
+The same caution applies to the cell temperature coefficient in
+`CellThermalResponse`: it is representative rather than measured, the derate is
+close to proportional to it, and `python -m experiments.run_energy B` sweeps it
+across the published range (3.0 % to 7.3 % energy penalty). Quote the sweep, not
+the point value.

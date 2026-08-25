@@ -218,3 +218,172 @@ def size_array(
     )
     per_m2 = system.array_gain_w / system.array_area_m2
     return required_gain / per_m2
+
+
+# ---------------------------------------------------------------------------
+# Where every joule goes
+# ---------------------------------------------------------------------------
+def energy_ledger(
+    trace,
+    payload_w=None,
+    cell_derate=None,
+) -> dict:
+    """Account for every joule from the array aperture to the load, in Wh.
+
+    The energy balance in :func:`energy_balance` reports what the battery does.
+    This reports something stricter and more useful for a paper's methodology
+    section: a *closed* budget in which the sunlight intercepted by the array
+    equals the sum of every loss and every delivered load, with nothing left
+    over.  Anything unaccounted for shows up immediately as a non-zero residual,
+    which makes the whole chain auditable rather than merely plausible.
+
+    The chain, in order, per unit of intercepted sunlight:
+
+    ===========================  ==================================================
+    ``incident``                 ``S(t) . nu . kappa . A``, the sunlight the array
+                                 aperture intercepts
+    ``loss_packing``             substrate area not covered by cells
+    ``loss_conversion``          photons the cell cannot convert, at its rating
+    ``loss_temperature``         the extra loss from running above 28 C (negative
+                                 where the array is *colder* than its rating, which
+                                 happens for a while after every sunrise)
+    ``loss_degradation``         end-of-life radiation and UV
+    ``loss_ppt``                 MPPT and PCDU conversion
+    ---------------------------  --------------------------------------------------
+    ``bus_generated``            what reaches the bus: the ``p_gen_w`` of the trace
+    ---------------------------  --------------------------------------------------
+    ``loss_charge``              round-trip loss charging the battery
+    ``loss_discharge``           round-trip loss discharging it
+    ``curtailed``                generation shunted with the battery already full
+    ``delivered_housekeeping``   consumed by the bus, broken out by subsystem
+    ``delivered_payload``        consumed by the payload
+    ``stored_delta``             net change in battery energy over the horizon
+    ===========================  ==================================================
+
+    ``payload_w`` is the payload schedule to account for; omitting it charges the
+    ledger for housekeeping alone, which isolates the cost of simply keeping the
+    spacecraft alive.
+
+    The curtailment line is the one worth reading twice.  It is not a loss the
+    hardware imposes -- it is generation the *schedule* failed to use, and on a
+    dawn-dusk orbit with a constant load it is the largest single entry after the
+    cell conversion loss.  That is the entire economic case for energy-aware
+    scheduling stated as an accounting identity.
+    """
+    sys_ = trace.system
+    dt_h = trace.dt_s / 3600.0
+    house = trace.p_house_series
+    p_gen = np.asarray(trace.p_gen_w, dtype=float)
+
+    payload = (np.zeros_like(p_gen) if payload_w is None
+               else np.broadcast_to(np.asarray(payload_w, dtype=float), p_gen.shape))
+
+    # --- the array chain, unwound backwards from p_gen ---------------------
+    if cell_derate is None:
+        if trace.panel_temperature_k is not None:
+            from .thermal import CellThermalResponse
+            cell_derate = CellThermalResponse(
+                eta_ref=sys_.cell_efficiency
+            ).derate_at(trace.panel_temperature_k)
+        else:
+            cell_derate = 1.0
+    derate = np.broadcast_to(np.asarray(cell_derate, dtype=float), p_gen.shape)
+
+    eta_eff = sys_.cell_efficiency * derate
+    chain = eta_eff * sys_.packing_factor * sys_.degradation_bol_eol * sys_.ppt_efficiency
+    # Where the chain is zero the array is producing nothing, so nothing is
+    # intercepted that is worth attributing; guard the division rather than
+    # letting a 0/0 propagate a NaN into an otherwise exact ledger.
+    incident = np.where(chain > 0.0, p_gen / np.where(chain > 0.0, chain, 1.0), 0.0)
+
+    after_pack = incident * sys_.packing_factor
+    loss_packing = incident - after_pack
+    # Conversion loss is split at the *rating*, so that the temperature line
+    # carries the whole of the correction this model adds and can be read on its
+    # own.  The two sum to the true conversion loss at the actual temperature.
+    loss_conversion = after_pack * (1.0 - sys_.cell_efficiency)
+    loss_temperature = after_pack * sys_.cell_efficiency * (1.0 - derate)
+    after_cell = after_pack * eta_eff
+    loss_degradation = after_cell * (1.0 - sys_.degradation_bol_eol)
+    after_deg = after_cell * sys_.degradation_bol_eol
+    loss_ppt = after_deg * (1.0 - sys_.ppt_efficiency)
+
+    # --- the bus, slot by slot --------------------------------------------
+    cap = sys_.battery_capacity_wh
+    b = cap
+    e_charge_gross = e_charge_loss = 0.0
+    e_discharge_loss = e_deficit = e_curtailed = 0.0
+
+    for k in range(p_gen.size):
+        delta = p_gen[k] - (house[k] + payload[k])
+        if delta >= 0.0:
+            gross = delta * dt_h
+            room = (cap - b) / sys_.charge_efficiency
+            used = min(gross, room)
+            e_curtailed += gross - used
+            e_charge_gross += used
+            e_charge_loss += used * (1.0 - sys_.charge_efficiency)
+            b += used * sys_.charge_efficiency
+        else:
+            need = -delta * dt_h
+            out = need / sys_.discharge_efficiency
+            out = min(out, b)                       # cannot draw what is not there
+            served = out * sys_.discharge_efficiency
+            e_deficit += served
+            e_discharge_loss += out - served
+            b -= out
+
+    e = lambda a: float(np.sum(a) * dt_h)
+    total_incident = e(incident)
+    delivered_house = e(house)
+    delivered_payload = e(payload)
+    stored_delta = b - cap
+
+    ledger = {
+        "incident_wh": total_incident,
+        "loss_packing_wh": e(loss_packing),
+        "loss_conversion_wh": e(loss_conversion),
+        "loss_temperature_wh": e(loss_temperature),
+        "loss_degradation_wh": e(loss_degradation),
+        "loss_ppt_wh": e(loss_ppt),
+        "bus_generated_wh": e(p_gen),
+        "loss_charge_wh": e_charge_loss,
+        "loss_discharge_wh": e_discharge_loss,
+        "curtailed_wh": e_curtailed,
+        "delivered_housekeeping_wh": delivered_house,
+        "delivered_payload_wh": delivered_payload,
+        "stored_delta_wh": stored_delta,
+    }
+
+    accounted = (
+        ledger["loss_packing_wh"]
+        + ledger["loss_conversion_wh"]
+        + ledger["loss_temperature_wh"]
+        + ledger["loss_degradation_wh"]
+        + ledger["loss_ppt_wh"]
+        + ledger["loss_charge_wh"]
+        + ledger["loss_discharge_wh"]
+        + ledger["curtailed_wh"]
+        + delivered_house
+        + delivered_payload
+        + stored_delta
+    )
+    ledger["accounted_wh"] = accounted
+    ledger["residual_wh"] = total_incident - accounted
+    ledger["residual_relative"] = (
+        abs(total_incident - accounted) / total_incident if total_incident > 0 else 0.0
+    )
+
+    # Useful fraction: what the payload got, per unit of sunlight intercepted.
+    ledger["end_to_end_efficiency"] = (
+        delivered_payload / total_incident if total_incident > 0 else 0.0
+    )
+    ledger["curtailed_fraction_of_generated"] = (
+        e_curtailed / ledger["bus_generated_wh"] if ledger["bus_generated_wh"] > 0 else 0.0
+    )
+
+    if trace.load is not None:
+        ledger["housekeeping_breakdown_w"] = trace.load.breakdown_w(
+            trace.eclipsed, trace.in_contact
+        )
+    return ledger

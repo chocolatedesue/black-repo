@@ -15,9 +15,10 @@ Run in this order — each stage consumes the previous stage's output.
 ```bash
 pip install numpy scipy                # scipy is only needed for export_traces
 
-python -m experiments.validate         # ~7 s   verification suite
+python -m experiments.validate         # ~25 s  verification suite
 python -m experiments.run_study        # ~20 min E1-E6, one simulated year each
 python -m experiments.run_profiles     # ~2 min  E7, master curve and profiles
+python -m experiments.run_energy       # ~20 s   E8, energy intensity and consumption
 python -m experiments.export_traces    # ~10 s   scheduling traces and bounds
 python -m experiments.build_page       # ~2 s    both HTML reports
 ```
@@ -57,6 +58,7 @@ with sync_playwright() as p:
     errs = []
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto("file:///home/user/black-repo/web/index.html", wait_until="load")
+    # ... and scheduling.html, which carries the energy-intensity section
     pg.wait_for_timeout(2500)
     print("errors:", errs or "none")
     print("charts:", pg.locator(".chart svg").count(), "tables:", pg.locator("table").count())
@@ -72,9 +74,11 @@ build failed.
 Only rerun what you actually invalidated:
 
 - Changed the shadow, orbit or solar model → everything, starting with `validate`.
-- Changed only the power or attitude model → `run_study` and `export_traces`;
-  `run_profiles` does not use them.
-- Changed only the scheduling code → `export_traces` and `build_page`.
+- Changed only the power or attitude model → `run_study`, `run_energy` and
+  `export_traces`; `run_profiles` does not use them.
+- Changed only the thermal or load model → `run_energy` and `build_page`. Nothing
+  else consumes them: they are opt-in, and every other stage runs with them off.
+- Changed only the scheduling code → `run_energy`, `export_traces`, `build_page`.
 - Changed only page copy, CSS or chart code → `build_page` alone.
 
 For a quick smoke test of the long stage, `run_study` takes experiment names:
@@ -86,6 +90,10 @@ For a quick smoke test of the long stage, `run_study` takes experiment names:
   two minutes and dominates the stage.
 - `export_traces` needs SciPy for the reference LP. Without it the traces still
   export but `optimal_schedule` raises ImportError with a clear message.
+  `run_energy` part D needs it for the same reason.
+- `run_energy` accepts part letters: `python -m experiments.run_energy A C` runs
+  two of the four, and merges them into the existing result file rather than
+  replacing it. Part D is the slow one (twelve LPs) and still under 20 s.
 - The published pages must be pure ASCII, because the artifact host supplies the
   `<head>` and the document cannot declare its own charset. `build_page` asserts
   this and exits rather than emitting a page that would render as mojibake.

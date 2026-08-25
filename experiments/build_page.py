@@ -193,6 +193,53 @@ def _assemble(template_name: str, app_name: str, payload: dict, out_name: str) -
     return 1 if size > 16 * 1024 else 0
 
 
+def _e8_for_page(e8: dict) -> dict:
+    """Trim E8 to what the scheduling page draws.
+
+    The per-epoch thermal samples are kept (they are the seasonal figure) but the
+    full ledgers are reduced to the lines the page actually shows.
+    """
+    keep_ledger = (
+        "incident_wh", "loss_packing_wh", "loss_conversion_wh",
+        "loss_temperature_wh", "loss_degradation_wh", "loss_ppt_wh",
+        "bus_generated_wh", "loss_charge_wh", "loss_discharge_wh",
+        "curtailed_wh", "delivered_housekeeping_wh", "delivered_payload_wh",
+        "stored_delta_wh", "residual_relative", "end_to_end_efficiency",
+        "curtailed_fraction_of_generated",
+    )
+    out = {"parameters": e8["parameters"]}
+    if "thermal" in e8:
+        out["thermal"] = {
+            k: {kk: vv for kk, vv in v.items() if kk != "samples"}
+            | {"samples": v["samples"]}
+            for k, v in e8["thermal"].items()
+        }
+    if "sensitivity" in e8:
+        out["sensitivity"] = e8["sensitivity"]
+    if "load" in e8:
+        out["load"] = e8["load"]
+    if "bounds" in e8:
+        out["bounds"] = {
+            "cases": {
+                k: {
+                    **{kk: v[kk] for kk in (
+                        "title", "array_model", "n_orbits", "horizon_hours",
+                        "flat_equivalent_w", "shape_only_effect",
+                        "thermal_effect", "end_to_end", "load_trace")},
+                    "configs": {
+                        name: {
+                            **{kk: vv for kk, vv in cfg.items() if kk != "ledger"},
+                            "ledger": {kk: cfg["ledger"][kk] for kk in keep_ledger},
+                        }
+                        for name, cfg in v["configs"].items()
+                    },
+                }
+                for k, v in e8["bounds"]["cases"].items()
+            }
+        }
+    return out
+
+
 def build_scheduling_payload() -> dict:
     """Payload for the scheduling-bounds page: bounds plus the raw power traces."""
     sched = _load("scheduling")
@@ -207,7 +254,8 @@ def build_scheduling_payload() -> dict:
             "p_gen_w": [float(r[3]) for r in rows],
             "eclipsed": [int(r[2]) for r in rows],
         }
-    return _round({"sched": sched, "traces": traces})
+    return _round({"sched": sched, "traces": traces,
+                   "e8": _e8_for_page(_load("e8_energy_intensity"))})
 
 
 def main() -> int:
