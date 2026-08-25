@@ -1,0 +1,567 @@
+<title>Orbital Sunlight Budget</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>/*__CSS__*/</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mark">Orbital Sunlight Budget</span>
+    <nav class="topnav" id="topnav">
+      <a href="#s1">1 · One revolution</a>
+      <a href="#s2">2 · Governing curve</a>
+      <a href="#s3">3 · Across the year</a>
+      <a href="#s4">4 · SSO design grid</a>
+      <a href="#s5">5 · Inclination</a>
+      <a href="#s6">6 · Walker shells</a>
+      <a href="#s7">7 · Energy</a>
+      <a href="#s8">8 · Method</a>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch colour theme">THEME</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Illumination and energy availability · LEO &amp; sun-synchronous orbits</p>
+    <h1>How long is a satellite actually in sunlight?</h1>
+    <p class="standfirst">
+      A one-year, per-revolution simulation of Earth-shadow geometry for circular
+      low Earth orbits and Walker constellations &mdash; with the shadow boundary
+      resolved to the millisecond, the solar disc treated as an extended source,
+      and every number traceable to a validated model.
+    </p>
+    <div class="byline">
+      <span>Epoch <b id="bl-epoch">—</b> · 366 days</span>
+      <span><b id="bl-revs">—</b> revolutions simulated per orbit</span>
+      <span>Shadow model: fractional solar-disc occultation</span>
+      <span>Opaque atmosphere <b>90 km</b></span>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <p class="fig-note" style="border:0;padding-left:0;max-width:74ch">
+      Figures for a 550 km circular orbit. &ldquo;Duty cycle&rdquo; is
+      <span class="mono">∫ν dt / T</span>, the illumination integral that scales
+      photovoltaic energy &mdash; not the binary sunlit fraction.
+    </p>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================================================================== -->
+<section id="s1">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 1</span><h2>What happens inside one revolution</h2></div>
+    <p class="lede">
+      A circular orbit's shadow geometry collapses to a single parameter: the
+      <b>beta angle</b> β, the angle between the Sun and the orbit plane. Everything
+      else &mdash; season, local time, inclination, node position &mdash; acts only
+      through β.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      一圈之内的光照/阴影时长只由一个量决定：太阳与轨道面的夹角 β。下面这张图是轨道面内的精确剖面——
+      地球阴影在轨道平面上的截线是一个椭圆，β 越大椭圆越细长，当它不再与轨道圆相交时，卫星全程见光。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 1 · interactive</span>
+          <span class="fig-title">Cross-section of the orbit plane: the shadow ellipse and the eclipse arc</span>
+        </div>
+        <div class="controls" id="ringControls"></div>
+      </div>
+      <div class="fig-body tight">
+        <div class="grid2 ring" style="align-items:center">
+          <div id="ringChart"></div>
+          <div id="ringReadout"></div>
+        </div>
+      </div>
+      <div class="fig-note">
+        Earth's shadow, intersected with the orbit plane, is the ellipse
+        <span class="mono">x²sin²β + y² = R²</span> with <span class="mono">R = R⊕ + 90 km</span>
+        &mdash; semi-minor axis <span class="mono">R</span> across the Sun line and semi-major
+        <span class="mono">R/sin β</span> along it. The satellite is eclipsed on the
+        anti-sunward half of that ellipse. As β grows the ellipse stretches until its
+        tip clears the orbit radius at <b>β* = arcsin(R/r)</b>, and the eclipse
+        disappears entirely. Durations shown are from the simulation, not from the drawing.
+      </div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 2</span>
+          <span class="fig-title">Illumination profile ν(u) around one revolution, 550 km</span>
+        </div>
+        <button class="tbl-toggle" id="tblBtn2" aria-expanded="false">Show data table</button>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="profileLegend"></div>
+        <div id="profileChart"></div>
+        <div class="tbl-wrap" id="tblWrap2"></div>
+      </div>
+      <div class="fig-note">
+        ν is the unocculted fraction of the solar disc. At full-orbit scale the
+        transitions look vertical, because a penumbral crossing spans only about a
+        degree of argument of latitude — Figure 3 resolves one. What this view does
+        show is the quantity that matters: as β approaches β*, the eclipse arc narrows
+        towards nothing rather than shallowing, so a satellite either takes the full
+        outage or none of it.
+      </div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 3</span>
+          <span class="fig-title">Shadow entry, resolved in seconds</span>
+        </div>
+      </div>
+      <div class="fig-body tight">
+        <div id="penumbraChart"></div>
+      </div>
+      <div class="fig-note">
+        The penumbral ramp lasts <b id="pen-dur">—</b> at 550 km, β = 0 &mdash; about
+        <b id="pen-pct">—</b> of the eclipse. Small, but it is the entire difference
+        between a conical and a cylindrical shadow model, and it is where a
+        binary flag misplaces energy.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s2">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 2</span><h2>The governing curve</h2></div>
+    <p class="lede">
+      One curve per altitude reproduces every eclipse duration in this study. It is
+      flat near β = 0, then falls off a cliff at β*.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      遮蔽时长对 β 在 0–40° 区间几乎不敏感（只掉 1–2 分钟），但在 β* 附近几度之内就从二十多分钟直接归零。
+      这意味着能量供给不是平滑变化的，而是有一个"悬崖"——星座设计与任务调度必须按这个非线性来做。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 4</span>
+          <span class="fig-title">Eclipse duration vs beta angle, by altitude</span>
+        </div>
+        <div class="controls" id="masterControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="masterLegend"></div>
+        <div id="masterChart"></div>
+      </div>
+      <div class="fig-note">
+        Dashed verticals mark β* for each altitude. Raising the orbit lowers β* &mdash;
+        higher orbits stop being eclipsed at a <em>smaller</em> beta angle, because the
+        Earth subtends less of the sky &mdash; while the eclipse itself gets slightly
+        shorter in minutes but occupies a similar fraction of the longer period.
+      </div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 1</span>
+          <span class="fig-title">Altitude family: period, critical beta, worst-case eclipse</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="altTable"></div></div>
+      <div class="fig-note">
+        Simulated at i = 53°, one year. <span class="mono">f_E</span> is the eclipse
+        fraction of the nodal period; the maximum is reached at β = 0.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s3">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 3</span><h2>What a year looks like</h2></div>
+    <p class="lede">
+      β is not a design constant. In a sun-synchronous orbit it breathes with the
+      seasons around a local-time-fixed mean; in an ordinary LEO it sweeps its full
+      range every beta cycle, dragging the eclipse duration with it.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      SSO 的 β 一年之内只在一个窄带里摆动（由 LTAN 决定中心值），所以能量供给稳定、可预测；
+      而 i = 53° 这类非太阳同步轨道的 β 会在 ±76° 之间来回扫，一年里有若干段完全无阴影期、也有满遮蔽期，
+      能量供给呈强周期性——这正是能耗调度要建模的对象。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 5 · interactive</span>
+          <span class="fig-title">One year of beta angle and eclipse duration</span>
+        </div>
+        <div class="controls" id="annualControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="annualLegend"></div>
+        <div id="annualBeta"></div>
+        <div id="annualEclipse" style="margin-top:6px"></div>
+      </div>
+      <div class="fig-note" id="annualNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 2</span>
+          <span class="fig-title">Reference orbits, one-year summary</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="refTable"></div></div>
+      <div class="fig-note">
+        &ldquo;Eclipse-free&rdquo; counts revolutions that never enter the penumbra,
+        expressed as equivalent days. The dawn&ndash;dusk orbit spends most of the
+        year there, which is exactly why it is chosen for power-hungry payloads.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s4">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 4</span><h2>The sun-synchronous design grid</h2></div>
+    <p class="lede">
+      For an SSO the local time of the ascending node is the single most consequential
+      power decision a mission makes &mdash; worth more than a factor of two in
+      annual energy, at zero mass cost.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      同样是 SSO，LTAN 从 10:30 换到 06:00（晨昏轨道），年均光照占空比从约 0.63 提升到 0.94 以上，
+      平均阴影时长从 36 分钟降到 6 分钟以内。这是一个不花任何重量代价的设计变量，做能耗研究时必须显式建模。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 6 · interactive</span>
+          <span class="fig-title">SSO design grid: LTAN × altitude</span>
+        </div>
+        <div class="controls" id="gridControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="scroll-x"><div id="ssoHeat"></div></div>
+      </div>
+      <div class="fig-note" id="gridNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 7</span>
+          <span class="fig-title">Annual eclipse profile by local time, 600 km</span>
+        </div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="ltanLegend"></div>
+        <div id="ltanChart"></div>
+      </div>
+      <div class="fig-note">
+        Between LTAN 07:00 and 08:00 the orbit crosses β*, and the annual profile
+        changes character: from a mostly eclipse-free orbit with two short shadow
+        seasons, to a permanently eclipsed one. Missions sited near that boundary
+        are the ones whose energy models must not use an annual average.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s5">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 5</span><h2>Inclination and the beta cycle</h2></div>
+    <p class="lede">
+      A non-sun-synchronous orbit's node regresses at a rate the Sun does not match,
+      so the geometry beats against the year at a period set by inclination.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      非太阳同步轨道的 β 以"拍频"周期变化，周期长度由倾角决定（53° / 550 km 约为 66 天）。
+      能量可用性因此呈现准周期性，年平均值会严重掩盖最坏工况——论文里应报告分位数与最坏轨道圈，而不是均值。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 8 · interactive</span>
+          <span class="fig-title">Beta angle over one year, by inclination</span>
+        </div>
+        <div class="controls" id="incControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="incLegend"></div>
+        <div id="incChart"></div>
+      </div>
+      <div class="fig-note" id="incNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 3</span>
+          <span class="fig-title">Inclination sweep at 550 km</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="incTable"></div></div>
+      <div class="fig-note">
+        The beta cycle is <span class="mono">2π / |Ω̇ − α̇☉|</span>. Near i = 96–98°
+        the two rates coincide and the cycle diverges &mdash; that is the
+        sun-synchronous condition, reached here as a limit rather than imposed.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s6">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 6</span><h2>Walker shells share their energy over the year, never at the same moment</h2></div>
+    <p class="lede">
+      Every satellite in a Walker plane carries that plane's beta angle, so energy
+      availability is a <em>per-plane</em> property. Whether that heterogeneity
+      averages out over a year turns out to depend entirely on whether the shell is
+      sun-synchronous.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      这是做星上算力/能耗调度最关键的一条，而且结论比直觉更细：
+      非太阳同步的 Walker 壳层（如 53°/550 km），所有轨道面的进动速率相同，只是相位不同 &mdash;
+      因此<b>年累计能量几乎完全均匀（面间差异仅约 2%）</b>，但<b>任一时刻各面的阴影时长差异极大</b>。
+      而太阳同步 Walker（各面 LTAN 固定不同）的差异是<b>永久性的、结构性的</b>，年均占空比可以相差 40% 以上。
+      前者需要按时间调度，后者需要按轨道面分配任务。
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 9 · interactive</span>
+          <span class="fig-title">Eclipse duration by orbital plane and day of year</span>
+        </div>
+        <div class="controls" id="matrixControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="scroll-x"><div id="planeMatrix"></div></div>
+      </div>
+      <div class="fig-note" id="matrixNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 10</span>
+          <span class="fig-title">Annual mean vs instantaneous spread across planes</span>
+        </div>
+        <button class="tbl-toggle" id="tblBtn9" aria-expanded="false">Show data table</button>
+      </div>
+      <div class="fig-body">
+        <div id="planeStrip"></div>
+        <div class="legend" id="envLegend" style="margin-top:18px"></div>
+        <div id="planeEnvelope"></div>
+        <div class="tbl-wrap" id="tblWrap9"></div>
+      </div>
+      <div class="fig-note" id="stripNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 11 · interactive</span>
+          <span class="fig-title">Instantaneous sunlit fraction of the whole constellation</span>
+        </div>
+        <div class="controls" id="constControls"></div>
+      </div>
+      <div class="fig-body">
+        <div id="constChart"></div>
+      </div>
+      <div class="fig-note" id="constNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s7">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 7</span><h2>From illumination to watts</h2></div>
+    <p class="lede">
+      Illumination is only half the chain. The other half is the cosine loss of the
+      array, and it works <em>against</em> the orbits that have the least eclipse.
+    </p>
+    <div class="callout">
+      <div class="h">本节要点</div>
+      晨昏 SSO 虽然几乎不进阴影，但 |β| 接近 90°，单轴驱动太阳翼的余弦效率 cos β 反而最低——
+      两个效应部分抵消。只报告"光照时长"而不报告阵列指向模型，得到的能量结论是不成立的。
+    </div>
+
+    <div class="eq">
+P<span class="c">gen</span>(t) = ν(t) · S(t) · A · η<span class="c">cell</span> · f<span class="c">pack</span> · f<span class="c">deg</span> · η<span class="c">ppt</span> · κ(t)
+<span class="c">   ν  fractional illumination (§1)      κ  array cosine factor (pointing model)
+   S  instantaneous irradiance         A  cell area</span>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 12</span>
+          <span class="fig-title">Orbit-average generated power by array pointing model</span>
+        </div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="powerLegend"></div>
+        <div id="powerBars"></div>
+      </div>
+      <div class="fig-note" id="powerNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 4</span>
+          <span class="fig-title">Energy balance and EPS sizing outcomes</span>
+        </div>
+        <div class="controls" id="epsControls"></div>
+      </div>
+      <div class="fig-body"><div id="epsTable"></div></div>
+      <div class="fig-note" id="epsNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s8">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">§ 8</span><h2>Model, validation, and what the assumptions cost</h2></div>
+    <p class="lede">
+      Numbers are only usable in a paper if the reader can see where they break.
+      This section states the model, its verification against closed-form and
+      almanac references, and the measured sensitivity to every discretionary choice.
+    </p>
+
+    <div class="prose">
+      <h3>Model</h3>
+      <p>
+        Circular orbits are propagated in mean elements with the secular J2 rates for
+        the node, the argument of perigee and the mean anomaly, giving an exact nodal
+        period and the correct nodal regression &mdash; the term that dominates
+        illumination geometry over months. The Sun uses the <em>Astronomical Almanac</em>
+        low-precision series (&lt; 0.01° in longitude), including the inverse-square
+        irradiance modulation of ±3.3 % between perihelion and aphelion.
+      </p>
+      <p>
+        Illumination is the unocculted fraction of the solar disc, computed as the
+        circle&ndash;circle lens overlap of the apparent discs of the Sun and of the
+        Earth as seen from the spacecraft, with the Earth's occulting radius taken as
+        R⊕ + 90 km. Shadow entry and exit epochs are then refined by bisection on the
+        continuous shadow function, which makes reported durations independent of the
+        sampling grid.
+      </p>
+
+      <h3>Verification</h3>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 5</span>
+          <span class="fig-title">Verification against independent references</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="valTable"></div></div>
+      <div class="fig-note">
+        Reproduced by <span class="mono">python -m experiments.validate</span>. The
+        suite exits non-zero on any failure, so no result in this document can be
+        generated from a model that does not pass.
+      </div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 6</span>
+          <span class="fig-title">What each modelling choice is worth</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="sensTable"></div></div>
+      <div class="fig-note">
+        Reported so that a reviewer can judge whether a simpler model would have
+        changed a conclusion. The opaque-atmosphere height is the largest
+        discretionary lever &mdash; larger than the difference between the conical
+        and the fractional shadow model &mdash; and is almost never stated in the
+        satellite-energy literature.
+      </div>
+    </div>
+
+    <div class="prose">
+      <h3>Known limits</h3>
+      <p>
+        Orbits are circular and the elements are mean, so short-period J2 oscillations
+        (a few kilometres) and drag decay are not modelled; both move the shadow
+        boundary by well under a second per revolution but drag does change the
+        altitude &mdash; and therefore β* &mdash; over a multi-year mission. Earth is
+        a sphere for shadow purposes; oblateness slightly shortens eclipses at high
+        latitudes. Albedo and Earth infrared input to the array are excluded, which is
+        conservative for power and non-conservative for thermal analysis. Battery
+        ageing, temperature-dependent cell efficiency and array shadowing by the bus
+        are outside the scope of the illumination model.
+      </p>
+
+      <h3>Reproducing this</h3>
+      <p>
+        The full pipeline is three commands against a single dependency (NumPy):
+      </p>
+    </div>
+
+    <div class="eq">python -m experiments.validate     <span class="c"># verification suite, exits non-zero on failure</span>
+python -m experiments.run_study    <span class="c"># E1–E6, one simulated year each</span>
+python -m experiments.run_profiles <span class="c"># E7, master curve and orbit profiles</span></div>
+
+    <div class="prose">
+      <p>
+        Every figure on this page reads the JSON those commands write; nothing is
+        transcribed by hand. Simulation parameters are recorded inside each result
+        file alongside the values.
+      </p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p>
+        <b>References for the model.</b>
+        Vallado, <em>Fundamentals of Astrodynamics and Applications</em>, 4th ed.
+        (secular J2 rates §9.6; sun-synchronous design §11.4; shadow algorithm §5.3).
+        Montenbruck &amp; Gill, <em>Satellite Orbits</em> §3.3–3.4 (solar ephemeris,
+        conical and fractional shadow). Walker, <em>J. Br. Interplanet. Soc.</em> 37
+        (1984) 559 (constellation patterns). Kopp &amp; Lean,
+        <em>Geophys. Res. Lett.</em> 38 (2011) L01706 (total solar irradiance).
+        Wertz &amp; Larson, <em>Space Mission Analysis and Design</em> Ch. 11 (EPS sizing).
+      </p>
+      <p style="margin-top:14px">
+        Generated from the <span class="mono">solarsim</span> package. Epoch
+        <span id="ft-epoch" class="mono">—</span>, 366 simulated days,
+        fractional solar-disc shadow model, 90 km opaque atmosphere.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script type="module">/*__JS__*/</script>

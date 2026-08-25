@@ -37,26 +37,29 @@ from .simulate import OrbitSimulation
 class PowerSystem:
     """Electrical power subsystem parameters.
 
-    Defaults describe a representative ~150 kg LEO smallsat with a
-    triple-junction GaAs array, sized in the class of platforms used for
-    on-board edge computing.
+    Defaults describe a representative ~200 kg LEO smallsat carrying an
+    on-board processing payload: a 2 m^2 triple-junction GaAs array, a 600 Wh
+    battery, and a 265 W total load of which 220 W is payload.  The array is
+    deliberately sized so that the balance is neither trivially satisfied nor
+    infeasible -- an oversized array would flatten every orbit into the same
+    answer and hide the effects this study is about.
     """
 
-    array_area_m2: float = 4.0
+    array_area_m2: float = 2.0
     cell_efficiency: float = 0.30       # triple-junction GaAs, BOL
     packing_factor: float = 0.90        # cell area / substrate area
     degradation_bol_eol: float = 0.85   # end-of-life radiation + UV losses
     ppt_efficiency: float = 0.93        # MPPT / PCDU conversion
     array_model: str = "single_axis_pitch"
 
-    battery_capacity_wh: float = 400.0
+    battery_capacity_wh: float = 600.0
     dod_limit: float = 0.30             # design limit for LEO cycle life
     charge_efficiency: float = 0.95
     discharge_efficiency: float = 0.97
     initial_soc: float = 1.0
 
-    housekeeping_w: float = 25.0        # bus, ADCS, TT&C, thermal
-    payload_w: float = 60.0             # nominal continuous payload draw
+    housekeeping_w: float = 45.0        # bus, ADCS, TT&C, thermal
+    payload_w: float = 220.0            # nominal continuous payload draw
     payload_duty: float = 1.0           # fraction of the orbit the payload runs
 
     @property

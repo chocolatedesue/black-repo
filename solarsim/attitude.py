@@ -50,6 +50,23 @@ def single_axis_pitch(r_sat, s_hat, h_hat):
     return np.sqrt(np.clip(1.0 - sin_beta**2, 0.0, 1.0))
 
 
+def single_axis_yaw(r_sat, s_hat, h_hat):
+    """Wings on a yaw-axis drive aligned with the nadir direction.
+
+    The array normal is constrained to the local horizontal plane, so the
+    cosine factor is the length of the Sun vector's projection onto that plane,
+    ``sqrt(1 - (s.r_hat)^2)``.  This is the mirror image of the pitch-axis
+    drive: it is nearly lossless when the Sun sits close to the orbit normal
+    (a dawn-dusk orbit) and poor when the Sun lies in the orbit plane.  Real
+    dawn-dusk platforms use this architecture, or a two-axis one, for exactly
+    that reason; benchmarking a dawn-dusk orbit with a pitch-axis drive
+    understates it by a factor of several.
+    """
+    _, _, _, r_hat = _lvlh_axes(r_sat, h_hat)
+    c = np.sum(r_hat * s_hat, axis=-1)
+    return np.sqrt(np.clip(1.0 - c**2, 0.0, 1.0))
+
+
 def body_zenith(r_sat, s_hat, h_hat):
     """A single body-mounted panel on the anti-nadir (zenith) face."""
     _, _, _, r_hat = _lvlh_axes(r_sat, h_hat)
@@ -81,6 +98,7 @@ def body_box6_normalised(r_sat, s_hat, h_hat):
 ARRAY_MODELS = {
     "two_axis": two_axis,
     "single_axis_pitch": single_axis_pitch,
+    "single_axis_yaw": single_axis_yaw,
     "body_zenith": body_zenith,
     "body_box6_norm": body_box6_normalised,
 }
@@ -88,6 +106,7 @@ ARRAY_MODELS = {
 ARRAY_LABELS = {
     "two_axis": "Two-axis gimballed wings",
     "single_axis_pitch": "Single-axis (pitch) drive",
+    "single_axis_yaw": "Single-axis (yaw) drive",
     "body_zenith": "Body-mounted, zenith face",
     "body_box6_norm": "Body-mounted, 6-face cuboid",
 }

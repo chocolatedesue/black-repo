@@ -121,11 +121,20 @@ class WalkerConstellation:
         t = np.atleast_1d(np.asarray(t_s, dtype=float))
         raan0, u0, _ = self.satellite_elements_deg()
 
-        raan = raan0[None, :] * DEG + ref.raan_rate_rad_s * t[:, None]
-        u = u0[None, :] * DEG + ref.u_rate_rad_s * t[:, None]
-        r_sat = _perifocal_to_eci(ref.a_km, raan, ref.inc_rad, u)
-        r_sun = sun_vector_eci(ref.jd_at(t))[:, None, :]
-        return illumination_fraction(r_sat, r_sun)
+        # Chunk over epochs: the (epoch x satellite) grid is large for a
+        # thousand-satellite shell and the shadow test allocates several
+        # intermediates of the same shape.
+        rows_per_chunk = max(1, 2_000_000 // max(self.n_total, 1))
+        out = np.empty((t.size, self.n_total), dtype=float)
+        for k0 in range(0, t.size, rows_per_chunk):
+            k1 = min(k0 + rows_per_chunk, t.size)
+            tc = t[k0:k1]
+            raan = raan0[None, :] * DEG + ref.raan_rate_rad_s * tc[:, None]
+            u = u0[None, :] * DEG + ref.u_rate_rad_s * tc[:, None]
+            r_sat = _perifocal_to_eci(ref.a_km, raan, ref.inc_rad, u)
+            r_sun = sun_vector_eci(ref.jd_at(tc))[:, None, :]
+            out[k0:k1] = illumination_fraction(r_sat, r_sun)
+        return out
 
     def plane_beta_deg(self, t_s) -> np.ndarray:
         """Beta angle of every plane at every epoch, shape ``(len(t_s), P)``."""
