@@ -159,25 +159,24 @@ def build_payload() -> dict:
     return _round(payload)
 
 
-def main() -> int:
-    template = (WEB / "index.template.html").read_text()
+def _assemble(template_name: str, app_name: str, payload: dict, out_name: str) -> int:
+    """Inline the stylesheet, both modules and the payload into one document."""
+    template = (WEB / template_name).read_text()
     css = (WEB / "style.css").read_text()
     charts = (WEB / "charts.js").read_text()
-    app = (WEB / "app.js").read_text()
+    app = (WEB / app_name).read_text()
 
     # Concatenate the two modules: `charts.js` first with its exports turned into
-    # plain declarations, then `app.js` with its import statement removed.  The
-    # published page is a single inline module, so cross-file imports cannot be
-    # resolved at runtime.
+    # plain declarations, then the page module with its import statement removed.
+    # The published page is a single inline module, so cross-file imports cannot
+    # be resolved at runtime.
     charts_inline = charts.replace("export function ", "function ").replace(
         "export const ", "const "
     )
     app_inline = app[app.index("} from \"./charts.js\";") + len('} from "./charts.js";'):]
 
-    payload = build_payload()
     # json.dumps escapes non-ASCII by default, which is what the inline script needs.
     data_js = "window.DATA = " + json.dumps(payload, separators=(",", ":")) + ";\n"
-
     js = _ascii_js(data_js + charts_inline + "\n" + app_inline)
 
     non_ascii_css = [c for c in css if ord(c) > 127]
@@ -186,14 +185,39 @@ def main() -> int:
 
     html = _ascii_html(template).replace("/*__CSS__*/", css).replace("/*__JS__*/", js)
     if any(ord(c) > 127 for c in html):
-        sys.exit("assembled page is not pure ASCII")
-    OUT.write_text(html, encoding="ascii")
-    size = OUT.stat().st_size / 1024
-    print(f"wrote {OUT.relative_to(ROOT)}  ({size:.0f} kB)")
-    if size > 16 * 1024:
-        print("WARNING: exceeds the 16 MB artifact limit")
-        return 1
-    return 0
+        sys.exit(f"{out_name} is not pure ASCII")
+    out = WEB / out_name
+    out.write_text(html, encoding="ascii")
+    size = out.stat().st_size / 1024
+    print(f"wrote {out.relative_to(ROOT)}  ({size:.0f} kB)")
+    return 1 if size > 16 * 1024 else 0
+
+
+def build_scheduling_payload() -> dict:
+    """Payload for the scheduling-bounds page: bounds plus the raw power traces."""
+    sched = _load("scheduling")
+    traces = {}
+    for key, case in sched["cases"].items():
+        path = RESULTS / case["trace_csv"]
+        if not path.exists():
+            sys.exit(f"missing {path.name}. Run `python -m experiments.export_traces`.")
+        rows = [ln.split(",") for ln in path.read_text().strip().splitlines()[1:]]
+        traces[key] = {
+            "t_s": [float(r[0]) for r in rows],
+            "p_gen_w": [float(r[3]) for r in rows],
+            "eclipsed": [int(r[2]) for r in rows],
+        }
+    return _round({"sched": sched, "traces": traces})
+
+
+def main() -> int:
+    rc = _assemble("index.template.html", "app.js", build_payload(), "index.html")
+    if (WEB / "scheduling.template.html").exists():
+        rc |= _assemble(
+            "scheduling.template.html", "app-scheduling.js",
+            build_scheduling_payload(), "scheduling.html",
+        )
+    return rc
 
 
 if __name__ == "__main__":

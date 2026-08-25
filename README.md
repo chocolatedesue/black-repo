@@ -8,11 +8,21 @@ numbers have to survive review.
 Single dependency: NumPy.
 
 ```
-python -m experiments.validate      # verification suite; exits non-zero on failure
-python -m experiments.run_study     # E1-E6, one simulated year each   (~20 min)
-python -m experiments.run_profiles  # E7, master curve and orbit profiles (~2 min)
-python -m experiments.build_page    # assemble web/index.html from results/*.json
+python -m experiments.validate       # verification suite; exits non-zero on failure
+python -m experiments.run_study      # E1-E6, one simulated year each   (~20 min)
+python -m experiments.run_profiles   # E7, master curve and orbit profiles (~2 min)
+python -m experiments.export_traces  # scheduling traces and bounds (needs SciPy)
+python -m experiments.build_page     # assemble both HTML reports from results/
 ```
+
+Two reports are produced:
+
+* **Orbital Sunlight Budget** (`web/index.html`) — the illumination study: eclipse
+  geometry, the SSO design grid, Walker-constellation heterogeneity, EPS sizing.
+* **Orbital Compute Energy Bounds** (`web/scheduling.html`) — the companion for
+  energy-aware compute scheduling: the model to cite, the parameter table with
+  provenance, the bounds a schedule must respect, and the headroom scheduling
+  captures.
 
 ## What the model does
 
@@ -25,6 +35,7 @@ python -m experiments.build_page    # assemble web/index.html from results/*.jso
 | Array | Two-axis, single-axis pitch, single-axis yaw, and body-mounted pointing models, each contributing a cosine factor κ(t) integrated alongside ν(t). |
 | Power | `P_gen = ν·S·A·η_cell·f_pack·f_deg·η_ppt·κ`, per-revolution energy balance, battery SoC propagation, DoD, and EPS sizing. |
 | Constellations | Walker Delta and Star, per-plane statistics and instantaneous constellation-level sunlit fraction. |
+| Scheduling | Per-slot power traces, the constant-draw and depth-of-discharge bounds, the burst envelope, and a reference LP for the optimal variable schedule. |
 
 ## Verification
 
@@ -64,6 +75,21 @@ python -m experiments.build_page    # assemble web/index.html from results/*.jso
 - No single solar-array architecture wins: a pitch-axis drive delivers 338 W at
   LTAN 10:30 and collapses to 138 W (1.2 W worst revolution) at dawn–dusk; a
   yaw-axis drive is the mirror image at 533 W.
+
+### Scheduling bounds
+
+- A **constant** payload draw must survive the worst moment of every orbit, so it
+  curtails generation for the rest of it: 233 W at LTAN 10:30 against an LP
+  optimum of 310 W on identical hardware — **+33 % headroom for scheduling**. The
+  gap tracks the eclipse fraction: only +9 % on a dawn–dusk orbit, +13 % at
+  i = 53°.
+- The familiar "orbit-average generation minus housekeeping" figure is not a bad
+  estimate — it is the **upper bound reachable only by scheduling**, and the LP
+  optimum lands within 0.5 % of it in all three orbits.
+- With uniform task value the optimum is **bang-bang**: full power in sunlight,
+  nothing in eclipse, because a round trip through the battery costs ~8 %.
+  Eclipse-time computation is therefore always bought by a deadline, a coverage
+  window or a latency target — never by energy.
 
 ## Layout
 

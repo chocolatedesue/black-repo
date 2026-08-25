@@ -41,7 +41,9 @@ jobs:
         run: |
           mkdir -p _site/data
           cp web/index.html _site/index.html
+          cp web/scheduling.html _site/scheduling.html
           cp results/*.json _site/data/
+          cp results/*.csv _site/data/
           touch _site/.nojekyll
 
       # Pages must already be enabled with "GitHub Actions" as the source

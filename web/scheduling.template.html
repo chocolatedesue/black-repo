@@ -1,0 +1,377 @@
+<title>Orbital Compute Energy Bounds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>/*__CSS__*/</style>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span class="mark">Orbital Compute Energy Bounds</span>
+    <nav class="topnav" id="topnav">
+      <a href="#s1">1 &middot; The model to cite</a>
+      <a href="#s2">2 &middot; Parameters</a>
+      <a href="#s3">3 &middot; Baseline vs optimum</a>
+      <a href="#s4">4 &middot; Scheduling form</a>
+      <a href="#s5">5 &middot; The trace</a>
+      <a href="#s6">6 &middot; What to skip</a>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch colour theme">THEME</button>
+  </div>
+</div>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Companion to the illumination study &middot; for energy-aware scheduling</p>
+    <h1>How much compute does an orbit pay for?</h1>
+    <p class="standfirst">
+      The smallest defensible chain from orbital illumination to a power budget a
+      scheduler can plan against &mdash; one citable model, one parameter table,
+      the bounds a schedule has to respect, and the headroom it exists to capture.
+    </p>
+    <div class="byline">
+      <span>Reference platform <b>2 m&sup2; array &middot; 600 Wh &middot; 45 W bus</b></span>
+      <span>Traces <b>3 orbits &middot; 10 s slots</b></span>
+      <span>Epoch <b id="bl-epoch">&mdash;</b></span>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+    <p class="fig-note" style="border:0;padding-left:0;max-width:76ch">
+      A constant payload draw has to survive the worst moment of every orbit, so it
+      leaves generation on the table for the rest of it. The gap between that
+      baseline and the scheduled optimum is not a modelling artefact &mdash; it is
+      the thing an energy-aware scheduler is for, and it is worth quantifying
+      before proposing one.
+    </p>
+  </div>
+</header>
+
+<main>
+
+<!-- ===================================================================== -->
+<section id="s1">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 1</span><h2>The model to cite, and nothing more</h2></div>
+    <p class="lede">
+      For a scheduling paper, the power subsystem is an input, not a contribution.
+      It needs to be standard, traceable, and about a paragraph long.
+    </p>
+    <div class="callout">
+      <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
+      &#35843;&#24230;&#35770;&#25991;&#37324;&#65292;&#30005;&#28304;&#27169;&#22411;&#26159;&#8220;&#36755;&#20837;&#8221;&#32780;&#19981;&#26159;&#8220;&#36129;&#29486;&#8221;&#12290;&#29992; SMAD &#31532;&#21313;&#19968;&#31456;&#30340;&#26631;&#20934;&#38142;&#26465;&#65292;&#25226;&#36712;&#36947;&#20960;&#20309;&#37027;&#19968;&#39033;&#25442;&#25104;&#36887;&#24230;&#31215;&#20998;&#8212;&#8212;
+      &#19968;&#20010;&#20844;&#24335;&#12289;&#19968;&#24352;&#21442;&#25968;&#34920;&#12289;&#19968;&#26465;&#24341;&#29992;&#65292;&#23601;&#36275;&#22815;&#25903;&#25745;&#20320;&#30340;&#35843;&#24230;&#32467;&#26524;&#20102;&#12290;&#20877;&#28145;&#20250;&#25668;&#28966;&#28857;&#65292;&#23457;&#31295;&#20154;&#20063;&#19981;&#20250;&#35201;&#12290;
+    </div>
+
+    <div class="eq">
+P<span class="c">gen</span>(t) = &#957;(t) &middot; S(t) &middot; A &middot; &#951;<span class="c">cell</span> &middot; f<span class="c">pack</span> &middot; f<span class="c">deg</span> &middot; &#951;<span class="c">ppt</span> &middot; &#954;(t)
+
+<span class="c">  &#957;(t)  fractional illumination -- solar disc unocculted by the Earth
+  S(t)  instantaneous irradiance, S&#8320;(AU/r&#9737;)&sup2;
+  &#954;(t)  array cosine factor for the pointing architecture
+  A, &#951;  cell area and efficiency; f terms are packing and end-of-life losses</span></div>
+
+    <div class="prose">
+      <h3>The paragraph</h3>
+      <p style="border-left:3px solid var(--line-strong);padding-left:16px;font-size:16px">
+        Generated power follows the standard photovoltaic sizing chain of Wertz
+        &amp; Larson [SMAD, Ch. 11]. The orbital term &nu;(t) is the fraction of the
+        solar disc unocculted by the Earth, computed from the circle&ndash;circle
+        overlap of the apparent discs of the Sun and Earth as seen from the
+        spacecraft, with the occulting radius taken as R<sub>&oplus;</sub> + 90 km to
+        account for the optically thick atmosphere [Montenbruck &amp; Gill, &sect;3.4];
+        shadow entry and exit epochs are refined by bisection so that reported
+        durations are independent of the sampling grid. Irradiance uses the
+        1361 W/m&sup2; total solar irradiance of Kopp &amp; Lean (2011) scaled by the
+        inverse square of the instantaneous Sun&ndash;Earth distance. The orbit is
+        propagated in mean elements with secular J<sub>2</sub> rates, which is what
+        governs the beta-angle drift over a planning horizon of weeks.
+      </p>
+      <p>
+        That is the whole model. It is enough to defend any energy number in a
+        scheduling paper, and it is short enough to sit in a methods section
+        without displacing the contribution.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s2">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 2</span><h2>Parameters, and where each number comes from</h2></div>
+    <p class="lede">
+      The reviewer question is never &ldquo;is 30&nbsp;% the right efficiency&rdquo; &mdash;
+      it is &ldquo;where did 30&nbsp;% come from&rdquo;. Every row below names a source.
+    </p>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 1</span>
+          <span class="fig-title">Reference platform and the provenance of each value</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="paramTable"></div></div>
+      <div class="fig-note">
+        The platform is a stand-in for a ~200 kg smallsat carrying a processing
+        payload, sized so the energy balance is neither trivially satisfied nor
+        infeasible. <b>Replace the cell and battery rows with your own hardware
+        before publishing</b> &mdash; the efficiency and temperature figures here are
+        typical values, not measurements, and current datasheets should be pulled
+        directly.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s3">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 3</span><h2>The baseline, the optimum, and the gap between them</h2></div>
+    <p class="lede">
+      Three numbers describe an orbit's compute budget: what a fixed draw survives,
+      what a schedule free to vary achieves, and how far above either you can burst.
+    </p>
+    <div class="callout">
+      <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
+      &#24120;&#35265;&#30340;&#8220;&#36712;&#36947;&#24179;&#22343;&#21457;&#30005;&#20943;&#25143;&#32791;&#8221;&#20854;&#23454;<b>&#19981;&#26159;&#20272;&#31639;&#38169;&#20102;&#65292;&#32780;&#26159;&#21482;&#26377;&#23436;&#32654;&#35843;&#24230;&#25165;&#33021;&#36798;&#21040;&#30340;&#19978;&#30028;</b>&#12290;
+      &#24688;&#24688;&#30456;&#21453;&#65306;&#24658;&#23450;&#21151;&#29575;&#22522;&#32447;&#22240;&#20026;&#35201;&#25675;&#20303;&#27599;&#22280;&#26368;&#22351;&#26102;&#21051;&#65292;&#22312;&#38451;&#29031;&#21306;&#30005;&#27744;&#20805;&#28385;&#21518;&#21482;&#33021;&#24323;&#30005;&#8212;&#8212;
+      &#20004;&#32773;&#20043;&#38388;<b>+9% &#21040; +33%</b> &#30340;&#24046;&#36317;&#65292;&#23601;&#26159;&#33021;&#32791;&#24863;&#30693;&#35843;&#24230;&#30340;&#25910;&#30410;&#31354;&#38388;&#12290;&#32780;&#19988;<b>&#38452;&#24433;&#36234;&#38271;&#65292;&#36825;&#20010;&#31354;&#38388;&#36234;&#22823;</b>&#8212;&#8212;
+      &#26216;&#26127;&#36712;&#36947;&#21482;&#26377; +9%&#65292;&#26222;&#36890; SSO &#26377; +33%&#12290;&#36825;&#21487;&#20197;&#30452;&#25509;&#20570;&#20320;&#35770;&#25991;&#30340; motivation &#22270;&#12290;
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 1 &middot; interactive</span>
+          <span class="fig-title">Three orbits: generation, the constant-power baseline, and the scheduled optimum</span>
+        </div>
+        <div class="controls" id="traceControls"></div>
+      </div>
+      <div class="fig-body">
+        <div class="legend" id="traceLegend"></div>
+        <div id="traceChart"></div>
+      </div>
+      <div class="fig-note" id="traceNote"></div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 2</span>
+          <span class="fig-title">What each orbit supports, and what scheduling adds</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="boundsTable"></div></div>
+      <div class="fig-note">
+        The constant baseline is found by bisecting on a fixed payload draw until
+        the state of charge both stays above the depth-of-discharge floor at every
+        instant and returns to full over a whole number of revolutions; each
+        condition is also solved alone, so the table can name which one binds. The
+        LP optimum is the same platform under &sect;4. Note the headroom tracks the
+        eclipse fraction: the dawn&ndash;dusk orbit, which barely eclipses, has little
+        for a scheduler to recover. That orbit is reported with a yaw-axis drive
+        because a pitch-axis drive cannot serve |&beta;| near 90&deg;.
+      </div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Figure 2 &middot; interactive</span>
+          <span class="fig-title">Burst envelope: how long a level above the baseline can be held</span>
+        </div>
+        <div class="controls" id="burstControls"></div>
+      </div>
+      <div class="fig-body">
+        <div id="burstChart"></div>
+      </div>
+      <div class="fig-note" id="burstNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s4">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 4</span><h2>The scheduling problem, in the form that stays linear</h2></div>
+    <p class="lede">
+      Battery dynamics with asymmetric charge and discharge efficiency look
+      non-convex written naively. Splitting the flow into two non-negative
+      variables keeps the whole thing an LP.
+    </p>
+    <div class="callout">
+      <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
+      &#30452;&#25509;&#20889; b[k] = b[k-1] + &Delta;(&hellip;)&#8314; &#20250;&#24341;&#20837;&#38750;&#20957;&#24615;&#12290;&#25226;&#20805;&#25918;&#30005;&#25286;&#25104;&#20004;&#20010;&#38750;&#36127;&#21464;&#37327; c[k]&#12289;d[k]&#65292;
+      &#32422;&#26463;&#20840;&#37096;&#32447;&#24615;&#65292;&#30446;&#26631;&#32447;&#24615;&#26102;&#26159;&#26631;&#20934; LP&#65307;&#26368;&#20248;&#35299;&#22788; c[k]&middot;d[k]=0 &#33258;&#21160;&#25104;&#31435;&#65288;&#21516;&#26102;&#20805;&#25918;&#30005;&#21482;&#20250;&#30333;&#30333;&#25439;&#32791;&#33021;&#37327;&#65289;&#65292;&#19981;&#38656;&#35201;&#39069;&#22806;&#30340;&#20114;&#26021;&#32422;&#26463;&#12290;
+    </div>
+
+    <div class="eq">
+<span class="c">indices    k = 1..K   scheduling slots of length &Delta;
+given      G[k]  generated power in slot k   (from the trace)
+           P_h   housekeeping draw
+           B     battery capacity, D depth-of-discharge limit
+           &eta;_c, &eta;_d  charge / discharge efficiency
+variables  p[k] &ge; 0   payload power
+           c[k] &ge; 0   power into the battery
+           d[k] &ge; 0   power out of the battery
+           b[k]        stored energy at the end of slot k</span>
+
+maximise    &Sigma;<span class="c">k</span>  w[k] &middot; p[k] &middot; &Delta;
+
+subject to  G[k] + d[k]  =  P_h + p[k] + c[k]          <span class="c">power balance</span>
+            b[k] = b[k-1] + &Delta;( &eta;_c c[k] - d[k]/&eta;_d )   <span class="c">state of charge</span>
+            (1 - D)&middot;B  &le;  b[k]  &le;  B                   <span class="c">depth-of-discharge limit</span>
+            0 &le; p[k] &le; P_max                          <span class="c">accelerator ceiling</span>
+            b[K] &ge; b[0]                                <span class="c">no borrowing across the horizon</span></div>
+
+    <div class="prose">
+      <p>
+        The terminal condition <span class="mono">b[K] &ge; b[0]</span> is what makes the
+        result repeatable rather than a one-off raid on the battery; drop it and
+        the optimiser will happily spend the whole reserve in the last orbit of
+        the horizon. With it in place, the optimum of this LP over a whole number
+        of revolutions is exactly the sustainable-power bound of &sect;3 &mdash; which
+        is a useful sanity check on any implementation.
+      </p>
+      <p>
+        Weights <span class="mono">w[k]</span> carry whatever the scheduler is really
+        optimising: task value, deadline urgency, ground-contact windows, thermal
+        derating. Non-linear utility in <span class="mono">p[k]</span> (diminishing
+        returns from clock scaling, for instance) makes it a convex program rather
+        than an LP, which is still tractable at these sizes &mdash; three orbits at
+        10 s slots is about 1&nbsp;700 slots and 5&nbsp;200 variables per satellite,
+        solved by HiGHS in roughly ten seconds.
+      </p>
+      <p>
+        This LP is implemented as
+        <span class="mono">solarsim.schedule.optimal_schedule()</span>, and it is
+        what produces the &ldquo;optimally scheduled&rdquo; figures throughout this
+        page. Two properties make it a useful reference point rather than just an
+        example. Its optimum with <span class="mono">w[k] = 1</span> lands within
+        half a percent of orbit-average generation minus housekeeping in all three
+        orbits, which confirms that the familiar back-of-envelope number is an
+        <em>upper</em> bound reachable only by scheduling. And solving it with the
+        periodicity constraint removed recovers the burst envelope of Figure 2,
+        which is a cheap consistency check on any reimplementation.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s5">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 5</span><h2>The trace</h2></div>
+    <p class="lede">
+      One CSV per orbit case, one row per scheduling slot. This is the
+      <span class="mono">G[k]</span> of &sect;4.
+    </p>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 3</span>
+          <span class="fig-title">Trace schema</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="schemaTable"></div></div>
+      <div class="fig-note">
+        Regenerate for any orbit, slot length or platform with
+        <span class="mono">python -m experiments.export_traces</span>. The
+        <span class="mono">solarsim.schedule</span> module exposes
+        <span class="mono">power_trace()</span>,
+        <span class="mono">sustainable_power()</span> and
+        <span class="mono">burst_envelope()</span> directly if you would rather call
+        them from your own harness.
+      </div>
+    </div>
+
+    <div class="eq">from solarsim.orbit import CircularOrbit, raan_from_ltan, sso_inclination
+from solarsim.power import PowerSystem
+from solarsim.schedule import power_trace, sustainable_power, burst_envelope
+
+orbit = CircularOrbit(550.0, sso_inclination(6928.1), raan_from_ltan(jd0, 10.5), 0.0, jd0)
+trace = power_trace(orbit, PowerSystem(array_model="single_axis_pitch"),
+                    n_orbits=3.0, dt_s=10.0)
+
+G     = trace.p_gen_w                 <span class="c"># the G[k] of the LP above</span>
+bound = sustainable_power(trace)      <span class="c"># the long-run ceiling</span>
+env   = burst_envelope(trace, [400, 600, 900])</div>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<section id="s6">
+  <div class="wrap">
+    <div class="sec-head"><span class="sec-no">&sect; 6</span><h2>What to leave out, and why</h2></div>
+    <p class="lede">
+      Refinements that are real physics but wrong for this paper. Each is listed
+      with what it would cost you and what it would buy.
+    </p>
+    <div class="callout">
+      <div class="h">&#26412;&#33410;&#35201;&#28857;</div>
+      &#19979;&#38754;&#36825;&#20960;&#39033;&#37117;&#26159;&#30495;&#23454;&#25928;&#24212;&#65292;&#20294;&#23545;&#35843;&#24230;&#35770;&#25991;&#26469;&#35828;&#26159;&#20882;&#28895;&#24377;&#12290;&#23427;&#20204;&#20250;&#25226;&#20320;&#30340;&#26041;&#27861;&#31456;&#33410;&#25289;&#38271;&#19968;&#20493;&#65292;&#25913;&#21464;&#30340;&#21364;&#26159;&#20320;&#26356;&#25913;&#19981;&#20102;&#30340;&#24120;&#25968;&#22240;&#23376;&#65292;
+      &#32780;&#19981;&#26159;&#35843;&#24230;&#31574;&#30053;&#30340;&#20248;&#21155;&#25490;&#24207;&#12290;&#35201;&#20889;&#23601;&#25918;&#22312;&#26597;&#26816;&#25972;&#25913;&#37324;&#65292;&#19981;&#35201;&#25918;&#22312;&#20027;&#32447;&#12290;
+    </div>
+
+    <div class="fig">
+      <div class="fig-head">
+        <div class="t">
+          <span class="fig-no">Table 4</span>
+          <span class="fig-title">Refinements, their magnitude, and the verdict</span>
+        </div>
+      </div>
+      <div class="fig-body"><div id="skipTable"></div></div>
+      <div class="fig-note">
+        The pattern: every one of these scales P<sub>gen</sub> by a factor that is
+        roughly constant across the schedules being compared. A scheduling result
+        expressed as a <em>ratio</em> against a baseline is nearly invariant to
+        them &mdash; which is the strongest argument for reporting ratios.
+      </div>
+    </div>
+
+    <div class="prose">
+      <h3>The one thing worth adding, if a reviewer pushes</h3>
+      <p>
+        Not more power physics &mdash; an independent cross-check of the eclipse
+        geometry. GMAT (NASA, open source) and Orekit (Apache&nbsp;2.0) both carry
+        validated eclipse detectors. Reproducing the eclipse durations with either
+        and reporting the agreement costs an afternoon and answers the
+        &ldquo;how do we know your energy input is right&rdquo; question far more
+        directly than any amount of added thermal modelling.
+      </p>
+
+      <h3>Reproducing this</h3>
+    </div>
+
+    <div class="eq">python -m experiments.validate        <span class="c"># model verification, exits non-zero on failure</span>
+python -m experiments.export_traces   <span class="c"># traces + scheduling bounds</span>
+python -m experiments.build_page      <span class="c"># this page</span></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p>
+        <b>References.</b>
+        Wertz &amp; Larson, <em>Space Mission Analysis and Design</em>, Ch. 11 (EPS
+        sizing chain). Montenbruck &amp; Gill, <em>Satellite Orbits</em>, &sect;3.3&ndash;3.4
+        (solar ephemeris, conical and fractional shadow). Vallado,
+        <em>Fundamentals of Astrodynamics and Applications</em>, 4th ed., &sect;5.3 and
+        &sect;9.6. Kopp &amp; Lean, <em>Geophys. Res. Lett.</em> 38 (2011) L01706 (total
+        solar irradiance). Anderson, Justus &amp; Batts, NASA/TM-2001-211221
+        (near-Earth thermal environment &mdash; needed only if you model albedo).
+      </p>
+      <p style="margin-top:14px">
+        Companion to the illumination study. Generated from the
+        <span class="mono">solarsim</span> package; every figure reads
+        <span class="mono">results/scheduling.json</span> and the trace CSVs directly.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script type="module">/*__JS__*/</script>
