@@ -13,6 +13,7 @@ python -m experiments.run_study      # E1-E6, one simulated year each   (~20 min
 python -m experiments.run_profiles   # E7, master curve and orbit profiles (~2 min)
 python -m experiments.run_energy     # E8, energy intensity and consumption (~20 s)
 python -m experiments.export_traces  # scheduling traces and bounds (needs SciPy)
+python -m experiments.gpu_match      # E9, accelerator sizing; --dod, --bus-kg, --all
 python -m experiments.build_page     # assemble both HTML reports from results/
 ```
 
@@ -40,6 +41,7 @@ Two reports are produced:
 | Accounting | A closed energy ledger from the array aperture to the load: every Wh of intercepted sunlight equals the sum of the optical, conversion, temperature, degradation, MPPT, charge and discharge losses, the curtailed surplus, and the delivered loads — verified to machine precision. |
 | Constellations | Walker Delta and Star, per-plane statistics and instantaneous constellation-level sunlit fraction. |
 | Scheduling | Per-slot power traces, the constant-draw and depth-of-discharge bounds, the burst envelope, and a reference LP for the optimal variable schedule. |
+| Hardware | A catalogue of flown and candidate compute accelerators, the marginal array + battery + radiator mass of one *always-on* watt in a given orbit, and the depth-of-discharge / cycle-life trade that decides whether always-on is a five-year mission. |
 
 ## Verification
 
@@ -129,6 +131,29 @@ Two reports are produced:
   nothing in eclipse, because a round trip through the battery costs ~8 %.
   Eclipse-time computation is therefore always bought by a deadline, a coverage
   window or a latency target — never by energy.
+
+### Running an accelerator through eclipse
+
+- Always-on is never impossible, only priced. One watt of *continuous* payload
+  power costs **51 g** of array + battery + radiator at LTAN 10:30, **41 g** on
+  a dawn–dusk orbit, and **75 g** at i = 53° with a pitch-axis drive (50 g with
+  a two-axis gimbal — the array is sized by the worst β of the year, so the
+  drive choice moves the answer by half).
+- A full H100 SXM at its 700 W board power is ~1120 W of system load. Running it
+  continuously needs **7.5 m² of array, 2.4 kWh of battery, 4.7 m² of radiator,
+  ~59 kg** of EPS and thermal hardware alone at LTAN 10:30 — so a 60 kg
+  satellite carrying one cannot be running it continuously at full power. The
+  same part on the study's reference 2 m² / 600 Wh bus runs at a **28 % duty
+  cycle**.
+- The radiator is not a footnote: in vacuum every delivered watt leaves as heat,
+  so the radiator is 60–70 % of the array area for any part in the catalogue.
+- **Depth of discharge, not mass, decides always-on.** Running through eclipse
+  is one discharge cycle per orbit — 5 492 a year at LTAN 10:30. Halving battery
+  mass by going from 30 % to 50 % DoD cuts life from 5.5 years to 1.8. On a
+  dawn–dusk orbit the same load cycles the battery only **1 676 times a year**
+  (254 eclipse-free days), so the identical 30 % design lasts **17.9 years** —
+  3.3× the life for 20 % less mass. This is the strongest argument for dawn–dusk
+  in the whole study, and it is invisible to an orbit-average energy budget.
 - **A trap, now guarded.** The constant-draw bound is solved by requiring the
   battery to end the horizon as charged as it began, which is only meaningful
   over a *whole number of revolutions*. Handed `86400 / T` — 15.04 revolutions,
@@ -171,6 +196,13 @@ Circular orbits with mean elements: short-period J2 terms and drag decay are not
 modelled (drag matters over a multi-year mission because it changes altitude and
 therefore β*). Earth is a sphere, both for shadow geometry and for ground-station
 access. Battery ageing and self-shadowing by the bus are out of scope.
+
+The accelerator sizing in `solarsim/hardware.py` is a scoping calculation, not a
+verified result: the orbital inputs come from the validated simulation, but the
+platform coefficients (130 Wh/kg battery, 100 W/kg array, 250 W/m² radiator) are
+engineering figures from the literature. `sensitivity()` reports the span across
+their plausible ranges — for the H100 case, 40–110 kg against a 59 kg nominal.
+Quote the ratios, not the absolute masses.
 
 The thermal model is a single node per unit array area: it has no conduction to
 the bus, no gradient across the panel, and no bus thermal state, so the survival
