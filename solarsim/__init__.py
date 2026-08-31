@@ -11,6 +11,7 @@ from .shadow import (
 )
 from .simulate import OrbitSimulation, simulate_orbit
 from .constellation import WalkerConstellation
+from .topology import GridTopology
 from .power import PowerSystem, energy_balance, energy_ledger
 from .thermal import CellThermalResponse, ThermalPanel, earth_fluxes
 from .load import GroundStation, LoadModel
@@ -30,6 +31,7 @@ __all__ = [
     "OrbitSimulation",
     "simulate_orbit",
     "WalkerConstellation",
+    "GridTopology",
     "PowerSystem",
     "energy_balance",
     "energy_ledger",

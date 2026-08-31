@@ -412,5 +412,157 @@
     "tolerance": 1e-09,
     "unit": "W",
     "pass": true
+  },
+  {
+    "check": "Crosslink degree",
+    "value": 4.0,
+    "expected": 4.0,
+    "tolerance": 1e-12,
+    "unit": "",
+    "pass": true
+  },
+  {
+    "check": "Crosslink graph is symmetric",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "bool",
+    "pass": true
+  },
+  {
+    "check": "Crosslink graph is connected",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "bool",
+    "pass": true
+  },
+  {
+    "check": "Undirected link count = 2T",
+    "value": 3168.0,
+    "expected": 3168.0,
+    "tolerance": 1e-12,
+    "unit": "",
+    "pass": true
+  },
+  {
+    "check": "Seam shift is an exact integer",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-12,
+    "unit": "slots",
+    "pass": true
+  },
+  {
+    "check": "Seam shift equals F mod S",
+    "value": 17.0,
+    "expected": 17.0,
+    "tolerance": 1e-12,
+    "unit": "slots",
+    "pass": true
+  },
+  {
+    "check": "Intra-plane chord at phase 0.00",
+    "value": 1971.9531941395524,
+    "expected": 1971.9531941395524,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Intra-plane chord at phase 0.17",
+    "value": 1971.9531941395524,
+    "expected": 1971.9531941395524,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Intra-plane chord at phase 0.41",
+    "value": 1971.9531941395524,
+    "expected": 1971.9531941395524,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Intra-plane chord at phase 0.73",
+    "value": 1971.9531941395524,
+    "expected": 1971.9531941395524,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Intra-plane range is constant",
+    "value": 3.751665644813329e-11,
+    "expected": 0.0,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Every plane is plane 0, one shift later",
+    "value": 2.6830093702301383e-11,
+    "expected": 0.0,
+    "tolerance": 1e-06,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Plane-to-plane shift",
+    "value": 61.5547006001911,
+    "expected": 61.5547,
+    "tolerance": 0.001,
+    "unit": "s",
+    "pass": true
+  },
+  {
+    "check": "Minimum link clearance",
+    "value": 479.4815620136287,
+    "expected": 480.0,
+    "tolerance": 5.0,
+    "unit": "km",
+    "pass": true
+  },
+  {
+    "check": "Anchored bound is periodicity-valid",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "bool",
+    "pass": true
+  },
+  {
+    "check": "Anchored bound matches E9's reference orbit",
+    "value": 254.67888592248352,
+    "expected": 254.9,
+    "tolerance": 1.0,
+    "unit": "W",
+    "pass": true
+  },
+  {
+    "check": "Anchor converged (1 slot vs 10 slots)",
+    "value": 9.962364266868917e-10,
+    "expected": 0.0,
+    "tolerance": 1.0,
+    "unit": "%",
+    "pass": true
+  },
+  {
+    "check": "Mid-eclipse start is still whole-revolution",
+    "value": 1.0,
+    "expected": 1.0,
+    "tolerance": 1e-12,
+    "unit": "bool",
+    "pass": true
+  },
+  {
+    "check": "Mid-eclipse start collapses the bound",
+    "value": 0.0,
+    "expected": 0.0,
+    "tolerance": 1e-09,
+    "unit": "W",
+    "pass": true
   }
 ]

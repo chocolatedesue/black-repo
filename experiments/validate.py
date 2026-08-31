@@ -20,6 +20,13 @@ V5  Energy chain            -- sidereal time against a worked example, Earth
                               constant-load path is unchanged by the addition
                               of the time-varying one.
 
+V6  Crosslink torus and     -- the +Grid is 4-regular, connected, closes on an
+    bound phasing             exact integer slot shift, has the closed-form
+                              intra-plane chord, and is plane-symmetric; and the
+                              constant-draw bound is anchored at the phase where
+                              it is meaningful, with the mid-eclipse collapse
+                              pinned so the trap cannot be rediscovered.
+
 Run with ``python -m experiments.validate``; a non-zero exit status means a
 check failed.
 """
@@ -54,7 +61,9 @@ from solarsim.shadow import (
 from solarsim.load import DEFAULT_NETWORK, GroundStation, LoadModel, elevation_deg
 from solarsim.power import PowerSystem, energy_ledger
 from solarsim.schedule import optimal_schedule, power_trace, sustainable_power
+from solarsim.constellation import WalkerConstellation
 from solarsim.simulate import simulate_orbit
+from solarsim.topology import GridTopology
 from solarsim.solar import solar_declination, sun_unit_and_range
 from solarsim.thermal import (
     ABS_ZERO_C,
@@ -501,6 +510,138 @@ def v5_energy_chain() -> None:
           lm.sunlit_quiescent_w(), 1e-9, "W")
 
 
+
+# ---------------------------------------------------------------------------
+def v6_topology_and_phase() -> None:
+    """The crosslink torus, and the phase at which the constant-draw bound holds.
+
+    The topology half checks that the ``+Grid`` really is the rigid 2D torus the
+    analysis assumes: 4-regular, connected, closing on itself with an integer
+    slot shift, and with an intra-plane range matching the closed-form chord.
+
+    The phase half records a trap in :func:`sustainable_power` that is distinct
+    from the fractional-horizon one checked in V5.  That one is about the
+    *length* of the horizon; this one is about where in the revolution it
+    starts.  Both must be right, and satisfying either does nothing for the
+    other.
+    """
+    print("\nV6  Crosslink torus and bound phasing")
+    jd0 = datetime_to_jd(dt.datetime(2024, 1, 1))
+    shell = WalkerConstellation(550.0, 53.0, 1584, 72, 17, "delta", 0.0, jd_epoch=jd0)
+    topo = GridTopology(shell)
+
+    # -- The torus is 4-regular, symmetric and connected.
+    adj = topo.neighbours
+    degree_ok = int((adj >= 0).sum(axis=1).min())
+    check("Crosslink degree", float(degree_ok), 4.0, 1e-12)
+    symmetric = all(bool((adj[j] == i).any())
+                    for i in range(topo.n_total) for j in adj[i] if j >= 0)
+    check("Crosslink graph is symmetric", float(symmetric), 1.0, 1e-12, "bool")
+    check("Crosslink graph is connected", float(topo.is_connected()), 1.0, 1e-12, "bool")
+    check("Undirected link count = 2T", float(topo.edge_i.size),
+          2.0 * topo.n_total, 1e-12)
+
+    # -- The ring closes on an exact integer slot shift, F mod S.
+    #    Derivation: walking the P planes accumulates P*F*(360/T) = F*(360/S)
+    #    degrees, which is exactly F slots of 360/S.  Checked against the
+    #    geometry rather than restated from the formula.
+    slots = shell.n_planes * shell.phasing_f * (360.0 / shell.n_total) / (
+        360.0 / shell.n_per_plane)
+    check("Seam shift is an exact integer", slots - round(slots), 0.0, 1e-12, "slots")
+    check("Seam shift equals F mod S", float(topo.seam_shift),
+          float(round(slots) % shell.n_per_plane), 1e-12, "slots")
+
+    # -- Intra-plane range is the closed-form chord and does not vary.
+    a_km = shell.reference_orbit().a_km
+    chord = 2.0 * a_km * math.sin(math.pi / shell.n_per_plane)
+    intra = topo.edge_kind == 0
+    spread = []
+    for frac in (0.0, 0.17, 0.41, 0.73):
+        r = topo.positions_eci(frac * shell.reference_orbit().nodal_period_s)
+        rng = topo.link_ranges(r)[intra]
+        spread.append(float(rng.max() - rng.min()))
+        check(f"Intra-plane chord at phase {frac:.2f}", float(rng.mean()), chord,
+              1e-6, "km")
+    check("Intra-plane range is constant", max(spread), 0.0, 1e-6, "km")
+
+    # -- Every plane is the image of every other: link ranges must not depend on
+    #    the plane index.  This is what forbids a permanent per-plane role.
+    #    The exact statement: mapping every satellite to the same slot one plane
+    #    over rotates the whole constellation about z by 360/P and advances the
+    #    argument of latitude by F*(360/T).  Rotation preserves ranges, so
+    #    plane p's link geometry now is plane 0's link geometry
+    #    F*(360/T)/(360/T_nodal) seconds later -- every plane is the same plane,
+    #    about a minute apart.  Nothing about the *illumination* follows from
+    #    this, because the Sun does not rotate with the pattern; that asymmetry
+    #    is what E10 measures.
+    shift_s = (shell.phasing_f * 360.0 / shell.n_total) / 360.0 * (
+        shell.reference_orbit().nodal_period_s)
+
+    def plane_link_ranges(t_s):
+        r = topo.positions_eci(t_s)
+        return np.linalg.norm(r[:, None, :] - r[topo.neighbours], axis=-1).reshape(
+            topo.n_planes, topo.n_per_plane, 4)
+
+    base = plane_link_ranges(0.0)
+    worst = max(
+        float(np.abs(base[q] - plane_link_ranges(q * shift_s)[0]).max())
+        for q in range(topo.n_planes)
+    )
+    check("Every plane is plane 0, one shift later", worst, 0.0, 1e-6, "km")
+    check("Plane-to-plane shift", shift_s, 61.5547, 0.001, "s")
+
+    # -- Every link clears the atmosphere at every phase, so the torus is not
+    #    only rigid in index but continuously usable.
+    clearance = min(
+        float(topo.link_clearance_km(
+            topo.positions_eci(f * shell.reference_orbit().nodal_period_s)).min())
+        for f in (0.0, 0.13, 0.29, 0.51, 0.77)
+    )
+    check("Minimum link clearance", clearance, 480.0, 5.0, "km")
+
+    # -- The constant-draw bound depends on the phase of the horizon, not only
+    #    its length.  Anchored at the end of the sunlit arc it is right; started
+    #    inside the eclipse it collapses to zero on a horizon V5 would accept.
+    from experiments.run_roles import SLOTS_PER_REV, _eclipse_entry_s, _orbit_at_day
+
+    orb0 = _orbit_at_day(shell, 0, back_off_s=0.0)     # at eclipse entry
+    period = orb0.nodal_period_s
+    dt_s = period / SLOTS_PER_REV
+    anchored = _orbit_at_day(shell, 0, back_off_s=dt_s)
+    system = PowerSystem(array_model="single_axis_pitch")
+
+    good = sustainable_power(power_trace(anchored, system, n_orbits=3.0, dt_s=dt_s))
+    check("Anchored bound is periodicity-valid",
+          float(good["periodicity_valid"]), 1.0, 1e-12, "bool")
+    check("Anchored bound matches E9's reference orbit",
+          good["sustainable_payload_w"], 254.9, 1.0, "W")
+
+    # Ten slots earlier must give the same answer: the anchor is converged, not
+    # balanced on a knife edge.
+    anchored10 = _orbit_at_day(shell, 0, back_off_s=10.0 * dt_s)
+    alt = sustainable_power(power_trace(anchored10, system, n_orbits=3.0, dt_s=dt_s))
+    check("Anchor converged (1 slot vs 10 slots)",
+          100.0 * abs(alt["sustainable_payload_w"] / good["sustainable_payload_w"] - 1.0),
+          0.0, 1.0, "%")
+
+    # A quarter of a revolution later the horizon is still a whole number of
+    # revolutions -- V5's test passes -- but the start is inside the eclipse and
+    # the bound is worthless.  This is the check that stops the trap being
+    # rediscovered.
+    entry = _eclipse_entry_s(orb0) or 0.0
+    inside = CircularOrbit(
+        shell.altitude_km, orb0.inc_rad,
+        orb0.raan0_rad + orb0.raan_rate_rad_s * 0.25 * period,
+        orb0.u0_rad + orb0.u_rate_rad_s * 0.25 * period,
+        orb0.jd_epoch + 0.25 * period / 86400.0,
+    )
+    bad = sustainable_power(power_trace(inside, system, n_orbits=3.0, dt_s=dt_s))
+    check("Mid-eclipse start is still whole-revolution",
+          float(bad["periodicity_valid"]), 1.0, 1e-12, "bool")
+    check("Mid-eclipse start collapses the bound",
+          bad["sustainable_payload_w"], 0.0, 1e-9, "W")
+
+
 def _plane_for_beta(target_beta_deg: float, jd: float):
     """Find (inclination, RAAN) giving a requested beta angle at epoch `jd`.
 
@@ -532,6 +673,7 @@ def main() -> int:
     v3_shadow_geometry()
     v4_convergence()
     v5_energy_chain()
+    v6_topology_and_phase()
 
     print("\n" + "=" * 78)
     if _failures:

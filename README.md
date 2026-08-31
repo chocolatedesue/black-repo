@@ -12,6 +12,7 @@ python -m experiments.validate       # verification suite; exits non-zero on fai
 python -m experiments.run_study      # E1-E6, one simulated year each   (~20 min)
 python -m experiments.run_profiles   # E7, master curve and orbit profiles (~2 min)
 python -m experiments.run_energy     # E8, energy intensity and consumption (~20 s)
+python -m experiments.run_roles      # E10, per-plane energy and roles (SciPy for LP)
 python -m experiments.export_traces  # scheduling traces and bounds (needs SciPy)
 python -m experiments.gpu_match      # E9, accelerator sizing; --dod --calibration
                                     #     --uncertainty --panel --radiator --bus-kg
@@ -41,6 +42,7 @@ Two reports are produced:
 | Load | Housekeeping resolved by subsystem and by time: survival heaters keyed to the shadow function, downlink transmitter keyed to ground-station visibility (GMST-based access geometry), plus OBC, ADCS, receiver and EPS parasitics. |
 | Accounting | A closed energy ledger from the array aperture to the load: every Wh of intercepted sunlight equals the sum of the optical, conversion, temperature, degradation, MPPT, charge and discharge losses, the curtailed surplus, and the delivered loads — verified to machine precision. |
 | Constellations | Walker Delta and Star, per-plane statistics and instantaneous constellation-level sunlit fraction. |
+| Crosslinks | The `+Grid` as a rigid 2D torus: closed-form intra-plane chord, inter-plane range, atmospheric clearance, and the depth of the eclipsed region in hops and in milliseconds. Taken as given, not designed. |
 | Scheduling | Per-slot power traces, the constant-draw and depth-of-discharge bounds, the burst envelope, and a reference LP for the optimal variable schedule. |
 | Hardware | A catalogue of flown and candidate compute accelerators, the marginal array + battery + radiator mass of one *always-on* watt in a given orbit, the depth-of-discharge / cycle-life trade that decides whether always-on is a five-year mission, a term-by-term generation uncertainty budget, and calibration against published industry figures. |
 
@@ -50,6 +52,11 @@ Two reports are produced:
 
 - **Ephemeris** — solstice/equinox declinations and perihelion/aphelion distance
   against almanac values.
+- **Crosslink torus** — the `+Grid` is 4-regular, symmetric and connected; the
+  ring closes on an exact integer slot shift (`F mod S`, checked against the
+  geometry rather than restated from the formula); the intra-plane range equals
+  the closed-form chord `2a sin(pi/S)` at every phase; and plane *p* reproduces
+  plane 0 one shift later to 2.7e-11 km.
 - **Sun-synchronous design** — inclinations at 400/600/800/1000 km against the
   standard design table, and LTAN held to < 2 min of drift over a year.
 - **Shadow geometry** — under the closed-form solution's own assumptions
@@ -117,6 +124,59 @@ Two reports are produced:
 - Of the sunlight the array intercepts, **13.2 % reaches the payload**; the
   single largest recoverable line is the **18.7 % of generated energy shunted
   away** because a constant draw cannot absorb it when it arrives.
+
+### Per-plane energy, and whether planes can have different jobs (E10)
+
+- **Every plane of a Walker Delta is the same plane, 61.55 s later.** Mapping
+  every satellite one plane over rotates the pattern about the Earth's axis and
+  advances the argument of latitude by `F(360/T)`; rotation preserves ranges, so
+  the crosslink geometry of plane *p* now is plane 0's a minute ago, to
+  **2.7e-11 km**. The network is exactly plane-symmetric. The *energy* is not,
+  because the Sun does not rotate with the pattern -- and that asymmetry is the
+  only thing a per-plane role could be built on.
+- Annual harvested energy differs across the 72 planes by **1.7 %**; on any given
+  day the planes span **28 percentage points** of duty cycle (up to 38.6), from
+  0.614 to a full eclipse-free 1.000. A permanent assignment has 1.7 % to work
+  with; one refreshed daily has twenty times that.
+- The ordering does not hold still. Plane rank correlation falls to 0.34 at
+  **7 days** and crosses zero by 10; the best-energy quartile has turned over
+  half its membership in 5 days and completely in 21. At any instant **3.0 of
+  72 planes** (67 satellites) are eclipse-free, each for an episode of
+  **5.2 days** (6.75 d worst case), 15.4 days a year.
+- In payload watts on the reference bus the instantaneous spread is a factor of
+  **2.3x** (241-556 W, two-axis array). With a pitch-axis drive it is **2.6x**
+  and the **sign flips**: the most-sunlit planes are the *least* powerful ones
+  (143 W mean above |beta| = 60 deg against 244 W below 20 deg), because the
+  cosine loss grows with |beta| faster than the eclipse shrinks. Which array a
+  constellation flies decides which planes are its rich ones.
+- Meanwhile the *constellation* is a constant-power machine: aggregate sunlit
+  fraction stays inside **0.683-0.691**, a 1.3 % peak-to-peak ripple, all year.
+  Individual nodes are intermittent; the pool is not.
+- On the crosslink torus the shadow is shallow. The eclipsed set is a single
+  connected region **99.4 %** of the time, and the deepest satellite in it is
+  **5 hops / 29.0 ms** from a satellite that is generating (mean 2.45 hops,
+  12.6 ms). But only **194-222 of 3168 links** cross the sunlit/eclipsed
+  boundary -- 0.40 links per eclipsed satellite -- and that cut bounds the rate
+  at which work can be moved into the sunlight however it is routed.
+- The **only** persistent differentiation found is between *shells*, not planes.
+  The same bus on a dawn-dusk sun-synchronous orbit sustains **481 W** against
+  the Delta shell's 225 W, a 2.1x standing advantage that never closes, and an
+  LTAN 10:30 plane holds **244-251 W across the whole year** where a Delta plane
+  swings 98-258 W. Persistent roles need sun-synchrony; a Delta shell can only
+  rotate them.
+
+### A second periodicity trap, now guarded
+
+The constant-draw bound depends on **where in the revolution the horizon
+starts**, not only on how long it is -- a trap distinct from the fractional-
+horizon one below, and not fixed by it. `sustainable_power` starts the battery
+full and asks whether it ends full, which is only a fair question from the end
+of the sunlit arc. Started elsewhere on a horizon of exactly three revolutions,
+the same orbit reports 0 W from inside the eclipse, then 36, 95, 142, 180, 212,
+239 W across the recharge, reaching its true **254.7 W** only in the last tenth
+of the sunlit arc. E10 anchors one slot before the bisection-refined eclipse
+entry -- ten slots gives the same answer to under 1 % -- and V6 pins both the
+anchored value and the mid-eclipse collapse.
 
 ### Scheduling bounds
 
@@ -198,10 +258,11 @@ for an operational satellite, so no stronger check exists.
 
 ```
 solarsim/          constants, time, solar ephemeris, orbit, geometry, shadow,
-                   attitude, simulate, constellation, power, thermal, load,
-                   schedule, evaluate
+                   attitude, simulate, constellation, topology, power, thermal,
+                   load, schedule, evaluate
 experiments/       validate.py, run_study.py, run_profiles.py, run_energy.py,
-                   export_traces.py, eval_policies.py, build_page.py
+                   run_roles.py, export_traces.py, eval_policies.py,
+                   build_page.py
 results/           *.json and trace_*.csv written by the experiments
 web/               style.css, charts.js, app.js, app-scheduling.js, templates
                    -> index.html, scheduling.html (self-contained)
